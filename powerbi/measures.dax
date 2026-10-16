@@ -1,0 +1,271 @@
+// =====================================================================
+// EDA Contact Centre: DAX measures
+// Create each one with "New measure" (Power BI web model view or Desktop).
+// Suggested home table and format string are in the comment above each.
+//
+// Layering: SQL does the row-level business logic (SL flags, FCR repeat
+// flags via LEAD, survey dedupe via ROW_NUMBER). DAX does aggregation and
+// anything that must respond to slicers: ratios, targets, time intelligence,
+// rankings. VAR ... RETURN is DAX's equivalent of a SQL CTE.
+// =====================================================================
+
+
+// ---------------------------------------------------------------- Volume  (home: Calls)
+
+Calls Offered = COUNTROWS ( Calls )                                   // #,0
+
+Calls Answered = SUM ( Calls[is_answered] )                           // #,0
+
+Short Abandons = SUM ( Calls[is_short_abandon] )                      // #,0
+
+Calls Abandoned =                                                     // #,0
+    SUM ( Calls[is_abandoned] ) - [Short Abandons]
+
+
+// ---------------------------------------------------------------- Service  (home: Calls)
+
+Service Level % =                                                     // 0.0%
+VAR AnsweredInThreshold = SUM ( Calls[answered_in_sl] )
+VAR EligibleCalls = [Calls Offered] - [Short Abandons]                // abandons under 5s don't count against SL
+RETURN
+    DIVIDE ( AnsweredInThreshold, EligibleCalls )
+
+// Queues have different targets (Sales/Retention 80/30, others 80/60), so the
+// blended target is weighted by each queue's volume in the current filter context.
+SL Target % =                                                         // 0.0%
+VAR QueueVolumes =
+    ADDCOLUMNS (
+        VALUES ( Queue[queue_id] ),
+        "@offered", [Calls Offered],
+        "@target", CALCULATE ( MAX ( Queue[SL Target %] ) )
+    )
+RETURN
+    DIVIDE ( SUMX ( QueueVolumes, [@offered] * [@target] ), SUMX ( QueueVolumes, [@offered] ) )
+
+SL vs Target (pts) = ( [Service Level %] - [SL Target %] ) * 100       // +0.0;-0.0
+
+SL Status Colour =                                                    // use as Field value in conditional formatting
+SWITCH (
+    TRUE (),
+    ISBLANK ( [Service Level %] ), BLANK (),
+    [Service Level %] >= [SL Target %], "#1E7B34",
+    [Service Level %] >= [SL Target %] - 0.05, "#B54708",
+    "#B42318"
+)
+
+Abandon Rate % =                                                      // 0.0%
+    DIVIDE ( [Calls Abandoned], [Calls Offered] - [Short Abandons] )
+
+ASA (sec) =                                                           // 0
+VAR AnsweredWait =
+    CALCULATE ( SUM ( Calls[wait_sec] ), Calls[is_answered] = 1 )
+RETURN
+    DIVIDE ( AnsweredWait, [Calls Answered] )
+
+AHT (sec) = DIVIDE ( SUM ( Calls[handle_sec] ), [Calls Answered] )    // 0
+
+AHT (mm:ss) =                                                         // text, for cards
+VAR Secs = ROUND ( [AHT (sec)], 0 )
+RETURN
+    IF ( NOT ISBLANK ( Secs ), INT ( Secs / 60 ) & ":" & FORMAT ( MOD ( Secs, 60 ), "00" ) )
+
+Hold % =                                                              // 0.0%
+    DIVIDE ( SUM ( Calls[hold_sec] ), SUM ( Calls[talk_sec] ) + SUM ( Calls[hold_sec] ) )
+
+Transfer Rate % =                                                     // 0.0%
+    DIVIDE ( SUM ( Calls[is_transferred] ), [Calls Answered] )
+
+SL 7-Day Rolling =                                                    // 0.0%
+VAR LastDay = MAX ( 'Date'[Date] )
+RETURN
+    CALCULATE ( [Service Level %], DATESINPERIOD ( 'Date'[Date], LastDay, -7, DAY ) )
+
+
+// ---------------------------------------------------------------- Forecast & staffing  (home: Forecast)
+
+Forecast Offered = SUM ( Forecast[forecast_offered] )                 // #,0
+
+Forecast Variance % =                                                 // +0%;-0%
+    DIVIDE ( [Calls Offered] - [Forecast Offered], [Forecast Offered] )
+
+Scheduled Hours = SUM ( Forecast[scheduled_hours] )                   // #,0
+
+Required Hours =                                                      // #,0
+VAR TargetOccupancy = 0.82
+VAR WorkloadHours = DIVIDE ( SUM ( Calls[handle_sec] ), 3600 )
+RETURN
+    DIVIDE ( WorkloadHours, TargetOccupancy )
+
+Staffing Gap (hrs) = [Required Hours] - [Scheduled Hours]             // +#,0;-#,0
+
+
+// ---------------------------------------------------------------- Customer experience  (home: Surveys)
+
+Survey Responses = COUNTROWS ( Surveys )                              // #,0
+
+Survey Response Rate % = DIVIDE ( [Survey Responses], [Calls Answered] )  // 0.0%
+
+Avg CSAT = AVERAGE ( Surveys[csat] )                                  // 0.00
+
+CSAT % (4-5) =                                                        // 0.0%
+VAR Scored = CALCULATE ( COUNTROWS ( Surveys ), NOT ISBLANK ( Surveys[csat] ) )
+VAR TopTwo = CALCULATE ( COUNTROWS ( Surveys ), Surveys[csat] >= 4 )
+RETURN
+    DIVIDE ( TopTwo, Scored )
+
+NPS =                                                                 // 0.0
+VAR Responses = CALCULATE ( COUNTROWS ( Surveys ), NOT ISBLANK ( Surveys[nps] ) )
+VAR Promoters = CALCULATE ( COUNTROWS ( Surveys ), Surveys[nps] >= 9 )
+VAR Detractors = CALCULATE ( COUNTROWS ( Surveys ), Surveys[nps] <= 6 )
+RETURN
+    DIVIDE ( Promoters - Detractors, Responses ) * 100
+
+FCR % (self-reported) = AVERAGE ( Surveys[fcr_self_reported] )       // 0.0%
+
+
+// ---------------------------------------------------------------- Resolution & sales  (home: Interactions)
+
+// Behavioural FCR: no repeat contact from the same policy within 7 days.
+// Contacts from the last 7 days of data are excluded until their window closes.
+FCR % =                                                               // 0.0%
+VAR Judged =
+    CALCULATE (
+        COUNTROWS ( Interactions ),
+        Interactions[fcr_eligible] = 1,
+        Interactions[fcr_window_complete] = 1
+    )
+VAR Repeats =
+    CALCULATE (
+        COUNTROWS ( Interactions ),
+        Interactions[fcr_eligible] = 1,
+        Interactions[fcr_window_complete] = 1,
+        Interactions[repeat_within_7d] = 1
+    )
+RETURN
+    DIVIDE ( Judged - Repeats, Judged )
+
+Repeat Contacts = CALCULATE ( COUNTROWS ( Interactions ), Interactions[repeat_within_7d] = 1 )  // #,0
+
+Sales Opportunities =                                                 // #,0
+    CALCULATE (
+        COUNTROWS ( Interactions ),
+        Interactions[contact_reason] IN { "New Quote", "Quote Follow-up", "Add Vehicle" }
+    )
+
+Policies Sold = SUM ( Interactions[is_sale] )                         // #,0
+
+Conversion % = DIVIDE ( [Policies Sold], [Sales Opportunities] )      // 0.0%
+
+Premium Written = SUM ( Interactions[annual_premium] )                // $#,0
+
+Avg Premium = DIVIDE ( [Premium Written], [Policies Sold] )           // $#,0
+
+Retention Save % =                                                    // 0.0%
+VAR Saved = CALCULATE ( COUNTROWS ( Interactions ), Interactions[outcome] = "Retained" )
+VAR Decided = CALCULATE ( COUNTROWS ( Interactions ), Interactions[outcome] IN { "Retained", "Cancelled" } )
+RETURN
+    DIVIDE ( Saved, Decided )
+
+
+// ---------------------------------------------------------------- Month on month  (home: Calls)
+// Requires 'Date' to be marked as the date table.
+
+Calls Offered PM = CALCULATE ( [Calls Offered], DATEADD ( 'Date'[Date], -1, MONTH ) )
+
+Calls Offered MoM % = DIVIDE ( [Calls Offered] - [Calls Offered PM], [Calls Offered PM] )   // +0.0%;-0.0%
+
+Service Level PM = CALCULATE ( [Service Level %], DATEADD ( 'Date'[Date], -1, MONTH ) )
+
+Service Level MoM (pts) =                                             // +0.0;-0.0
+    IF ( NOT ISBLANK ( [Service Level PM] ), ( [Service Level %] - [Service Level PM] ) * 100 )
+
+AHT MoM (sec) =                                                       // +0;-0
+VAR Prior = CALCULATE ( [AHT (sec)], DATEADD ( 'Date'[Date], -1, MONTH ) )
+RETURN
+    IF ( NOT ISBLANK ( Prior ), [AHT (sec)] - Prior )
+
+CSAT MoM =                                                            // +0.00;-0.00
+VAR Prior = CALCULATE ( [Avg CSAT], DATEADD ( 'Date'[Date], -1, MONTH ) )
+RETURN
+    IF ( NOT ISBLANK ( Prior ), [Avg CSAT] - Prior )
+
+Conversion MoM (pts) =                                                // +0.0;-0.0
+VAR Prior = CALCULATE ( [Conversion %], DATEADD ( 'Date'[Date], -1, MONTH ) )
+RETURN
+    IF ( NOT ISBLANK ( Prior ), ( [Conversion %] - Prior ) * 100 )
+
+Calls Offered MTD = TOTALMTD ( [Calls Offered], 'Date'[Date] )        // #,0
+
+
+// ---------------------------------------------------------------- Agent performance  (home: Agent)
+
+Agent AHT vs Team (sec) =                                             // +0;-0
+VAR TeamAHT = CALCULATE ( [AHT (sec)], ALLEXCEPT ( Agent, Agent[Team] ) )
+RETURN
+    IF ( [Calls Answered] > 0, [AHT (sec)] - TeamAHT )
+
+Agent CSAT vs Team =                                                  // +0.00;-0.00
+VAR TeamCSAT = CALCULATE ( [Avg CSAT], ALLEXCEPT ( Agent, Agent[Team] ) )
+RETURN
+    IF ( [Survey Responses] > 0, [Avg CSAT] - TeamCSAT )
+
+Agent AHT Rank =                                                      // 0  (1 = fastest)
+IF (
+    ISINSCOPE ( Agent[Agent] ) && [Calls Answered] > 0,
+    RANKX (
+        FILTER ( ALLSELECTED ( Agent[Agent] ), [Calls Answered] > 0 ),
+        [AHT (sec)], , ASC, DENSE
+    )
+)
+
+Agent CSAT Rank =                                                     // 0  (1 = best)
+IF (
+    ISINSCOPE ( Agent[Agent] ) && [Survey Responses] >= 10,
+    RANKX (
+        FILTER ( ALLSELECTED ( Agent[Agent] ), [Survey Responses] >= 10 ),
+        [Avg CSAT], , DESC, DENSE
+    )
+)
+
+
+// ---------------------------------------------------------------- Narrative & labels  (home: Calls)
+
+Report Title =
+"Contact Centre Performance | "
+    & SELECTEDVALUE ( 'Date'[Reporting Month], "Multiple months" )
+    & " | " & SELECTEDVALUE ( Queue[Brand], "All brands" )
+
+Data As At =
+"Data to " & FORMAT ( MAX ( Calls[call_date] ), "d mmm yyyy" )
+    & "  |  Refreshed " & FORMAT ( MAX ( RefreshLog[Last Refreshed] ), "d mmm yyyy h:mm AM/PM" )
+
+// Table-valued VARs: build a small table, then pick from it (the DAX cousin of a CTE + ORDER BY ... LIMIT 1)
+Worst SL Day =
+VAR DailySL =
+    FILTER (
+        ADDCOLUMNS ( VALUES ( 'Date'[Date] ), "@sl", [Service Level %], "@calls", [Calls Offered] ),
+        [@calls] > 0
+    )
+VAR Worst = TOPN ( 1, DailySL, [@sl], ASC )
+RETURN
+    IF (
+        NOT ISEMPTY ( Worst ),
+        "Lowest service level: " & FORMAT ( MAXX ( Worst, 'Date'[Date] ), "ddd d mmm" )
+            & " at " & FORMAT ( MAXX ( Worst, [@sl] ), "0%" )
+            & " on " & FORMAT ( MAXX ( Worst, [@calls] ), "#,0" ) & " calls"
+    )
+
+Top Repeat Reason =
+VAR ByReason =
+    FILTER (
+        ADDCOLUMNS ( VALUES ( Interactions[contact_reason] ), "@repeats", [Repeat Contacts], "@fcr", [FCR %] ),
+        [@repeats] > 0
+    )
+VAR Worst = TOPN ( 1, ByReason, [@repeats], DESC )
+RETURN
+    IF (
+        NOT ISEMPTY ( Worst ),
+        "Most repeat contacts: " & MAXX ( Worst, Interactions[contact_reason] )
+            & " (" & FORMAT ( MAXX ( Worst, [@repeats] ), "#,0" ) & " repeats, FCR "
+            & FORMAT ( MAXX ( Worst, [@fcr] ), "0%" ) & ")"
+    )

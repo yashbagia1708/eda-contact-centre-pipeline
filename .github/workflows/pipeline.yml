@@ -1,0 +1,56 @@
+# On every push: unit tests, then a full Sep -> Oct refresh against a real MySQL 8,
+# a re-run of October to prove the load is idempotent, and the post-load data checks.
+# The Power BI workbook and KPI pack are attached to the run as downloadable artifacts.
+name: pipeline
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root_pass
+          MYSQL_DATABASE: contact_centre
+          MYSQL_USER: eda
+          MYSQL_PASSWORD: eda_pass
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ueda -peda_pass"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: eda
+      DB_PASSWORD: eda_pass
+      DB_NAME: contact_centre
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Unit tests
+        run: pytest -q
+      - name: Load September (baseline)
+        run: python -m pipeline.run --month 2026-09
+      - name: Monthly refresh - October (next pending month)
+        run: python -m pipeline.run
+      - name: Re-run October (must not double count)
+        run: python -m pipeline.run --month 2026-10
+      - name: Post-load data checks
+        run: python scripts/verify.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: outputs
+          path: |
+            output/powerbi/contact_centre_model.xlsx
+            output/reports/
+            output/logs/
+            output/rejects/
