@@ -97,9 +97,17 @@ The closest thing to running it yourself without installing anything, Refresh Co
 3. In the codespace terminal, run `python app.py`. The Refresh Console opens on that browser desktop, starts MySQL
    itself, and works as below: **Start fresh**, then **Run monthly refresh**.
 
-Outputs land in `output/` in the codespace (right-click a file in the Explorer → **Download** to open a KPI pack in
-Excel). Codespaces usage counts against your own GitHub account's free monthly allowance; delete the codespace when
-you're done (**Code → Codespaces → … → Delete**).
+**Good to know**
+
+- **No Power BI in a codespace.** It's a Linux machine in the cloud, and Power BI Desktop is Windows-only, so the
+  console's **Open Power BI to refresh** button (stage 9) has nothing to open there. The pipeline still writes the
+  Power BI model workbook; the report itself needs [Power BI Desktop on your machine](#then-power-bi).
+- **The console's Open buttons don't open files there either** (KPI pack, model folder, quarantined rows). Outputs
+  land in `output/`: right-click a file in the codespace Explorer → **Download** to open a KPI pack in Excel.
+- **First start takes about 5 minutes**; later starts of the same codespace are quick. A run is a little slower than
+  on a laptop (2 cores), and the console shows in light mode.
+- **Usage counts against your own GitHub account's** free monthly Codespaces allowance (a run uses a few minutes of
+  it). Delete the codespace when you're done: **Code → Codespaces → … → Delete**.
 
 ![Refresh Console running in a codespace](docs/codespaces_console.png)
 
