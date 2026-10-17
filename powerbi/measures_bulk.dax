@@ -1,0 +1,473 @@
+// Paste this whole file into the DAX query view of the semantic model (Editing mode),
+// then click 'Update model: Add new measures' above DEFINE. Generated from measures.dax.
+// DAX query view does not set format strings: set those afterwards (see POWERBI_SETUP.md).
+DEFINE
+    MEASURE Calls[Calls Offered] =
+        COUNTROWS ( Calls )                                   // #,0
+
+    MEASURE Calls[Calls Answered] =
+        SUM ( Calls[is_answered] )                           // #,0
+
+    MEASURE Calls[Short Abandons] =
+        SUM ( Calls[is_short_abandon] )                      // #,0
+
+    MEASURE Calls[Calls Abandoned] =
+        // #,0
+            SUM ( Calls[is_abandoned] ) - [Short Abandons]
+
+    MEASURE Calls[Service Level %] =
+        // 0.0%
+        VAR AnsweredInThreshold = SUM ( Calls[answered_in_sl] )
+        VAR EligibleCalls = [Calls Offered] - [Short Abandons]                // abandons under 5s don't count against SL
+        RETURN
+            DIVIDE ( AnsweredInThreshold, EligibleCalls )
+
+    MEASURE Calls[Blended SL Target %] =
+        // 0.0%
+        VAR QueueVolumes =
+            ADDCOLUMNS (
+                VALUES ( Queue[queue_id] ),
+                "@offered", [Calls Offered],
+                "@target", CALCULATE ( MAX ( Queue[SL Target %] ) )
+            )
+        RETURN
+            DIVIDE ( SUMX ( QueueVolumes, [@offered] * [@target] ), SUMX ( QueueVolumes, [@offered] ) )
+
+    MEASURE Calls[SL vs Target (pts)] =
+        ( [Service Level %] - [Blended SL Target %] ) * 100       // +0.0;-0.0
+
+    MEASURE Calls[SL Status Colour] =
+        // use as Field value in conditional formatting
+        SWITCH (
+            TRUE (),
+            ISBLANK ( [Service Level %] ), BLANK (),
+            [Service Level %] >= [Blended SL Target %], "#1E7B34",
+            [Service Level %] >= [Blended SL Target %] - 0.05, "#B54708",
+            "#B42318"
+        )
+
+    MEASURE Calls[Abandon Rate %] =
+        // 0.0%
+            DIVIDE ( [Calls Abandoned], [Calls Offered] - [Short Abandons] )
+
+    MEASURE Calls[ASA (sec)] =
+        // 0
+        VAR AnsweredWait =
+            CALCULATE ( SUM ( Calls[wait_sec] ), Calls[is_answered] = 1 )
+        RETURN
+            DIVIDE ( AnsweredWait, [Calls Answered] )
+
+    MEASURE Calls[AHT (sec)] =
+        DIVIDE ( SUM ( Calls[handle_sec] ), [Calls Answered] )    // 0
+
+    MEASURE Calls[AHT (mm:ss)] =
+        // text, for cards
+        VAR Secs = ROUND ( [AHT (sec)], 0 )
+        RETURN
+            IF ( NOT ISBLANK ( Secs ), INT ( Secs / 60 ) & ":" & FORMAT ( MOD ( Secs, 60 ), "00" ) )
+
+    MEASURE Calls[Hold %] =
+        // 0.0%
+            DIVIDE ( SUM ( Calls[hold_sec] ), SUM ( Calls[talk_sec] ) + SUM ( Calls[hold_sec] ) )
+
+    MEASURE Calls[Transfer Rate %] =
+        // 0.0%
+            DIVIDE ( SUM ( Calls[is_transferred] ), [Calls Answered] )
+
+    MEASURE Calls[SL 7-Day Rolling] =
+        // 0.0%
+        VAR LastDay = MAX ( 'Date'[Date] )
+        RETURN
+            CALCULATE ( [Service Level %], DATESINPERIOD ( 'Date'[Date], LastDay, -7, DAY ) )
+
+    MEASURE Forecast[Forecast Offered] =
+        SUM ( Forecast[forecast_offered] )                 // #,0
+
+    MEASURE Forecast[Forecast Variance %] =
+        // +0%;-0%
+            DIVIDE ( [Calls Offered] - [Forecast Offered], [Forecast Offered] )
+
+    MEASURE Forecast[Scheduled Hours] =
+        SUM ( Forecast[scheduled_hours] )                   // #,0
+
+    MEASURE Forecast[Required Hours] =
+        // #,0
+        VAR TargetOccupancy = 0.82
+        VAR WorkloadHours = DIVIDE ( SUM ( Calls[handle_sec] ), 3600 )
+        RETURN
+            DIVIDE ( WorkloadHours, TargetOccupancy )
+
+    MEASURE Forecast[Staffing Gap (hrs)] =
+        ROUND ( [Required Hours], 0 ) - ROUND ( [Scheduled Hours], 0 )   // +#,0;-#,0  (whole hours so the cards reconcile)
+
+    MEASURE Surveys[Survey Responses] =
+        COUNTROWS ( Surveys )                              // #,0
+
+    MEASURE Surveys[Survey Response Rate %] =
+        DIVIDE ( [Survey Responses], [Calls Answered] )  // 0.0%
+
+    MEASURE Surveys[Avg CSAT] =
+        AVERAGE ( Surveys[csat] )                                  // 0.00
+
+    MEASURE Surveys[CSAT % (4-5)] =
+        // 0.0%
+        VAR Scored = CALCULATE ( COUNTROWS ( Surveys ), NOT ISBLANK ( Surveys[csat] ) )
+        VAR TopTwo = CALCULATE ( COUNTROWS ( Surveys ), Surveys[csat] >= 4 )
+        RETURN
+            DIVIDE ( TopTwo, Scored )
+
+    MEASURE Surveys[NPS Score] =
+        // 0.0
+        VAR Responses = CALCULATE ( COUNTROWS ( Surveys ), NOT ISBLANK ( Surveys[nps] ) )
+        VAR Promoters = CALCULATE ( COUNTROWS ( Surveys ), Surveys[nps] >= 9 )
+        VAR Detractors = CALCULATE ( COUNTROWS ( Surveys ), Surveys[nps] <= 6 )
+        RETURN
+            DIVIDE ( Promoters - Detractors, Responses ) * 100
+
+    MEASURE Surveys[FCR % (self-reported)] =
+        AVERAGE ( Surveys[fcr_self_reported] )       // 0.0%
+
+    MEASURE Interactions[FCR %] =
+        // 0.0%
+        VAR Judged =
+            CALCULATE (
+                COUNTROWS ( Interactions ),
+                Interactions[fcr_eligible] = 1,
+                Interactions[fcr_window_complete] = 1
+            )
+        VAR Repeats =
+            CALCULATE (
+                COUNTROWS ( Interactions ),
+                Interactions[fcr_eligible] = 1,
+                Interactions[fcr_window_complete] = 1,
+                Interactions[repeat_within_7d] = 1
+            )
+        RETURN
+            DIVIDE ( Judged - Repeats, Judged )
+
+    MEASURE Interactions[Repeat Contacts] =
+        CALCULATE ( COUNTROWS ( Interactions ), Interactions[repeat_within_7d] = 1 )  // #,0
+
+    MEASURE Interactions[Sales Opportunities] =
+        // #,0
+            CALCULATE (
+                COUNTROWS ( Interactions ),
+                Interactions[contact_reason] IN { "New Quote", "Quote Follow-up", "Add Vehicle" }
+            )
+
+    MEASURE Interactions[Policies Sold] =
+        SUM ( Interactions[is_sale] )                         // #,0
+
+    MEASURE Interactions[Conversion %] =
+        DIVIDE ( [Policies Sold], [Sales Opportunities] )      // 0.0%
+
+    MEASURE Interactions[Premium Written] =
+        SUM ( Interactions[annual_premium] )                // $#,0
+
+    MEASURE Interactions[Avg Premium] =
+        DIVIDE ( [Premium Written], [Policies Sold] )           // $#,0
+
+    MEASURE Interactions[Retention Save %] =
+        // 0.0%
+        VAR Saved = CALCULATE ( COUNTROWS ( Interactions ), Interactions[outcome] = "Retained" )
+        VAR Decided = CALCULATE ( COUNTROWS ( Interactions ), Interactions[outcome] IN { "Retained", "Cancelled" } )
+        RETURN
+            DIVIDE ( Saved, Decided )
+
+    MEASURE Calls[Calls Offered PM] =
+        CALCULATE ( [Calls Offered], DATEADD ( 'Date'[Date], -1, MONTH ) )
+
+    MEASURE Calls[Calls Offered MoM %] =
+        DIVIDE ( [Calls Offered] - [Calls Offered PM], [Calls Offered PM] )   // +0.0%;-0.0%
+
+    MEASURE Calls[Service Level PM] =
+        CALCULATE ( [Service Level %], DATEADD ( 'Date'[Date], -1, MONTH ) )
+
+    MEASURE Calls[Service Level MoM (pts)] =
+        // +0.0;-0.0
+            IF ( NOT ISBLANK ( [Service Level PM] ), ( [Service Level %] - [Service Level PM] ) * 100 )
+
+    MEASURE Calls[AHT MoM (sec)] =
+        // +0;-0
+        VAR Prior = CALCULATE ( [AHT (sec)], DATEADD ( 'Date'[Date], -1, MONTH ) )
+        RETURN
+            IF ( NOT ISBLANK ( Prior ), [AHT (sec)] - Prior )
+
+    MEASURE Calls[CSAT MoM] =
+        // +0.00;-0.00
+        VAR Prior = CALCULATE ( [Avg CSAT], DATEADD ( 'Date'[Date], -1, MONTH ) )
+        RETURN
+            IF ( NOT ISBLANK ( Prior ), [Avg CSAT] - Prior )
+
+    MEASURE Calls[Conversion MoM (pts)] =
+        // +0.0;-0.0
+        VAR Prior = CALCULATE ( [Conversion %], DATEADD ( 'Date'[Date], -1, MONTH ) )
+        RETURN
+            IF ( NOT ISBLANK ( Prior ), ( [Conversion %] - Prior ) * 100 )
+
+    MEASURE Calls[Abandon Rate MoM (pts)] =
+        // +0.0;-0.0
+        VAR Prior = CALCULATE ( [Abandon Rate %], DATEADD ( 'Date'[Date], -1, MONTH ) )
+        RETURN
+            IF ( NOT ISBLANK ( Prior ), ( [Abandon Rate %] - Prior ) * 100 )
+
+    MEASURE Calls[ASA MoM (sec)] =
+        // +0;-0
+        VAR Prior = CALCULATE ( [ASA (sec)], DATEADD ( 'Date'[Date], -1, MONTH ) )
+        RETURN
+            IF ( NOT ISBLANK ( Prior ), [ASA (sec)] - Prior )
+
+    MEASURE Calls[NPS MoM] =
+        // +0.0;-0.0
+        VAR Prior = CALCULATE ( [NPS Score], DATEADD ( 'Date'[Date], -1, MONTH ) )
+        RETURN
+            IF ( NOT ISBLANK ( Prior ), [NPS Score] - Prior )
+
+    MEASURE Calls[FCR MoM (pts)] =
+        // +0.0;-0.0
+        VAR Prior = CALCULATE ( [FCR %], DATEADD ( 'Date'[Date], -1, MONTH ) )
+        RETURN
+            IF ( NOT ISBLANK ( Prior ), ( [FCR %] - Prior ) * 100 )
+
+    MEASURE Calls[Calls Offered MTD] =
+        TOTALMTD ( [Calls Offered], 'Date'[Date] )        // #,0
+
+    MEASURE Agent[Agent AHT vs Team (sec)] =
+        // +0;-0
+        VAR TeamAHT = CALCULATE ( [AHT (sec)], ALLEXCEPT ( Agent, Agent[Team] ) )
+        RETURN
+            IF ( HASONEVALUE ( Agent[Agent] ) && [Calls Answered] > 0, [AHT (sec)] - TeamAHT )   // blank on totals
+
+    MEASURE Agent[Agent CSAT vs Team] =
+        // +0.00;-0.00
+        VAR TeamCSAT = CALCULATE ( [Avg CSAT], ALLEXCEPT ( Agent, Agent[Team] ) )
+        RETURN
+            IF ( HASONEVALUE ( Agent[Agent] ) && [Survey Responses] > 0, [Avg CSAT] - TeamCSAT )
+
+    MEASURE Agent[Agent AHT Rank] =
+        // 0  (1 = fastest)
+        IF (
+            ISINSCOPE ( Agent[Agent] ) && [Calls Answered] > 0,
+            RANKX (
+                FILTER ( ALLSELECTED ( Agent[Agent] ), [Calls Answered] > 0 ),
+                [AHT (sec)], , ASC, DENSE
+            )
+        )
+
+    MEASURE Agent[Agent CSAT Rank] =
+        // 0  (1 = best)
+        IF (
+            ISINSCOPE ( Agent[Agent] ) && [Survey Responses] >= 10,
+            RANKX (
+                FILTER ( ALLSELECTED ( Agent[Agent] ), [Survey Responses] >= 10 ),
+                [Avg CSAT], , DESC, DENSE
+            )
+        )
+
+    MEASURE Calls[Report Title] =
+        // Australian month format: 10-2026
+        VAR MonthStart = SELECTEDVALUE ( 'Date'[Month Start] )
+        RETURN
+            "Contact Centre Performance | "
+                & IF ( ISBLANK ( MonthStart ), "Multiple months", FORMAT ( MonthStart, "mm-yyyy" ) )
+                & " | " & SELECTEDVALUE ( Queue[Brand], "All brands" )
+
+    MEASURE Calls[Data As At] =
+        "Data to " & FORMAT ( MAX ( Calls[call_date] ), "d mmm yyyy" )
+            & "  |  Refreshed " & FORMAT ( MAX ( RefreshLog[Last Refreshed] ), "d mmm yyyy h:mm AM/PM" )
+
+    MEASURE Calls[Worst SL Day] =
+        VAR DailySL =
+            FILTER (
+                ADDCOLUMNS ( VALUES ( 'Date'[Date] ), "@sl", [Service Level %], "@calls", [Calls Offered] ),
+                [@calls] > 0
+            )
+        VAR Worst = TOPN ( 1, DailySL, [@sl], ASC )
+        RETURN
+            IF (
+                NOT ISEMPTY ( Worst ),
+                "Lowest service level: " & FORMAT ( MAXX ( Worst, 'Date'[Date] ), "ddd d mmm" )
+                    & " at " & FORMAT ( MAXX ( Worst, [@sl] ), "0%" )
+                    & " on " & FORMAT ( MAXX ( Worst, [@calls] ), "#,0" ) & " calls"
+            )
+
+    MEASURE Calls[Top Repeat Reason] =
+        VAR ByReason =
+            FILTER (
+                ADDCOLUMNS ( VALUES ( Interactions[contact_reason] ), "@repeats", [Repeat Contacts], "@fcr", [FCR %] ),
+                [@repeats] > 0
+            )
+        VAR Worst = TOPN ( 1, ByReason, [@repeats], DESC )
+        RETURN
+            IF (
+                NOT ISEMPTY ( Worst ),
+                "Most repeat contacts: " & MAXX ( Worst, Interactions[contact_reason] )
+                    & " (" & FORMAT ( MAXX ( Worst, [@repeats] ), "#,0" ) & " repeats, FCR "
+                    & FORMAT ( MAXX ( Worst, [@fcr] ), "0%" ) & ")"
+            )
+
+    MEASURE Calls[Biggest Forecast Miss] =
+        VAR ByQueue =
+            FILTER (
+                ADDCOLUMNS (
+                    VALUES ( Queue[queue_id] ),
+                    "@name", CALCULATE ( MAX ( Queue[Brand] ) ) & " " & CALCULATE ( MAX ( Queue[Queue] ) ),
+                    "@var", [Forecast Variance %],
+                    "@sl", [Service Level %]
+                ),
+                NOT ISBLANK ( [@var] )
+            )
+        VAR Worst = TOPN ( 1, ByQueue, [@var], DESC, Queue[queue_id], ASC )
+        RETURN
+            IF (
+                NOT ISEMPTY ( Worst ),
+                "Biggest forecast miss: " & MAXX ( Worst, [@name] )
+                    & " ran " & FORMAT ( MAXX ( Worst, [@var] ), "+0%;-0%" ) & " vs forecast, SL "
+                    & FORMAT ( MAXX ( Worst, [@sl] ), "0%" )
+            )
+
+    MEASURE Calls[Largest Staffing Gap Day] =
+        VAR ByDay =
+            FILTER (
+                ADDCOLUMNS (
+                    VALUES ( 'Date'[Date] ),
+                    "@gap", [Staffing Gap (hrs)], "@req", [Required Hours], "@sched", [Scheduled Hours]
+                ),
+                NOT ISBLANK ( [@req] )
+            )
+        VAR Worst = TOPN ( 1, ByDay, [@gap], DESC, 'Date'[Date], ASC )
+        RETURN
+            IF (
+                NOT ISEMPTY ( Worst ),
+                IF (
+                    MAXX ( Worst, [@gap] ) > 0,
+                    "Most short-staffed: " & FORMAT ( MAXX ( Worst, 'Date'[Date] ), "ddd d mmm" ) & ", "
+                        & FORMAT ( MAXX ( Worst, [@gap] ), "#,0" ) & " hrs short ("
+                        & FORMAT ( MAXX ( Worst, [@req] ), "#,0" ) & " needed vs "
+                        & FORMAT ( MAXX ( Worst, [@sched] ), "#,0" ) & " rostered)",
+                    "Rostered hours covered demand every day"
+                )
+            )
+
+    MEASURE Calls[Weakest Hour] =
+        VAR ByHour =
+            FILTER (
+                ADDCOLUMNS ( VALUES ( Calls[hour_of_day] ), "@sl", [Service Level %], "@calls", [Calls Offered] ),
+                [@calls] >= 100                                               // ignore thin hours
+            )
+        VAR Worst = TOPN ( 1, ByHour, [@sl], ASC, Calls[hour_of_day], ASC )
+        RETURN
+            IF (
+                NOT ISEMPTY ( Worst ),
+                "Weakest hour: " & FORMAT ( MAXX ( Worst, Calls[hour_of_day] ), "00" ) & ":00 at "
+                    & FORMAT ( MAXX ( Worst, [@sl] ), "0%" ) & " SL across "
+                    & FORMAT ( MAXX ( Worst, [@calls] ), "#,0" ) & " calls"
+            )
+
+    MEASURE Calls[Agent Role Model] =
+        VAR Agents =
+            FILTER (
+                ADDCOLUMNS (
+                    SUMMARIZE ( Agent, Agent[employee_id], Agent[Agent], Agent[Team] ),
+                    "@calls", [Calls Answered], "@surveys", [Survey Responses],
+                    "@ahtvs", [Agent AHT vs Team (sec)], "@csat", [Avg CSAT], "@csatvs", [Agent CSAT vs Team]
+                ),
+                Agent[Team] <> "Unassigned" && [@calls] >= 100 && [@surveys] >= 10
+                    && [@ahtvs] < 0 && [@csatvs] > 0
+            )
+        VAR Best = TOPN ( 1, Agents, [@ahtvs], ASC, Agent[employee_id], ASC )
+        RETURN
+            IF (
+                NOT ISEMPTY ( Best ),
+                "Role model: " & MAXX ( Best, Agent[Agent] ) & " (" & MAXX ( Best, Agent[Team] ) & "), "
+                    & FORMAT ( -MAXX ( Best, [@ahtvs] ), "0" ) & "s faster than team with CSAT "
+                    & FORMAT ( MAXX ( Best, [@csat] ), "0.00" ),
+                "No agent beat their team on both AHT and CSAT"
+            )
+
+    MEASURE Calls[Agent Coaching Focus] =
+        VAR Agents =
+            FILTER (
+                ADDCOLUMNS (
+                    SUMMARIZE ( Agent, Agent[employee_id], Agent[Agent], Agent[Team] ),
+                    "@calls", [Calls Answered], "@ahtvs", [Agent AHT vs Team (sec)]
+                ),
+                Agent[Team] <> "Unassigned" && [@calls] >= 100
+            )
+        VAR Worst = TOPN ( 1, Agents, [@ahtvs], DESC, Agent[employee_id], ASC )
+        RETURN
+            IF (
+                NOT ISEMPTY ( Worst ) && MAXX ( Worst, [@ahtvs] ) > 0,
+                "Coaching focus: " & MAXX ( Worst, Agent[Agent] ) & " (" & MAXX ( Worst, Agent[Team] ) & "), AHT "
+                    & FORMAT ( MAXX ( Worst, [@ahtvs] ), "+0" ) & "s vs team across "
+                    & FORMAT ( MAXX ( Worst, [@calls] ), "#,0" ) & " calls"
+            )
+
+    MEASURE Calls[Highest Transfer Team] =
+        VAR Teams =
+            FILTER (
+                ADDCOLUMNS ( VALUES ( Agent[Team] ), "@tr", [Transfer Rate %], "@calls", [Calls Answered] ),
+                Agent[Team] <> "Unassigned" && [@calls] > 0
+            )
+        VAR Worst = TOPN ( 1, Teams, [@tr], DESC, Agent[Team], ASC )
+        VAR Centre = CALCULATE ( [Transfer Rate %], Agent[Team] <> "Unassigned" )
+        RETURN
+            IF (
+                NOT ISEMPTY ( Worst ),
+                "Highest transfers: " & MAXX ( Worst, Agent[Team] ) & " at " & FORMAT ( MAXX ( Worst, [@tr] ), "0.0%" )
+                    & " of answered calls (centre " & FORMAT ( Centre, "0.0%" ) & ")"
+            )
+
+    MEASURE Calls[Top Product] =
+        VAR ByProduct =
+            FILTER (
+                ADDCOLUMNS (
+                    VALUES ( Interactions[product] ),
+                    "@sold", [Policies Sold], "@premium", [Premium Written], "@avg", [Avg Premium]
+                ),
+                NOT ISBLANK ( Interactions[product] ) && [@sold] > 0
+            )
+        VAR Best = TOPN ( 1, ByProduct, [@premium], DESC, Interactions[product], ASC )
+        RETURN
+            IF (
+                NOT ISEMPTY ( Best ),
+                "Top product: " & MAXX ( Best, Interactions[product] ) & ", "
+                    & FORMAT ( MAXX ( Best, [@sold] ), "#,0" ) & " policies, $"
+                    & FORMAT ( MAXX ( Best, [@premium] ) / 1000000, "0.00" ) & "M premium (avg $"
+                    & FORMAT ( MAXX ( Best, [@avg] ), "#,0" ) & ")"
+            )
+
+    MEASURE Calls[Lowest NPS Queue] =
+        VAR ByQueue =
+            FILTER (
+                ADDCOLUMNS (
+                    VALUES ( Queue[queue_id] ),
+                    "@name", CALCULATE ( MAX ( Queue[Brand] ) ) & " " & CALCULATE ( MAX ( Queue[Queue] ) ),
+                    "@nps", [NPS Score],
+                    "@n", CALCULATE ( COUNTROWS ( Surveys ), NOT ISBLANK ( Surveys[nps] ) )
+                ),
+                [@n] >= 30                                                    // ignore queues with too few responses
+            )
+        VAR Worst = TOPN ( 1, ByQueue, [@nps], ASC, Queue[queue_id], ASC )
+        RETURN
+            IF (
+                NOT ISEMPTY ( Worst ),
+                "Lowest NPS: " & MAXX ( Worst, [@name] ) & " at " & FORMAT ( MAXX ( Worst, [@nps] ), "0.0" )
+                    & " (" & FORMAT ( MAXX ( Worst, [@n] ), "#,0" ) & " responses)"
+            )
+
+    MEASURE Calls[Brand Accent Colour] =
+        // bars, title text, accent strips
+        SWITCH ( SELECTEDVALUE ( Queue[Brand] ), "KT Insurance", "#0CA630", "Club 4x4", "#1C3F4C", "#667085" )
+
+    MEASURE Calls[Brand Dark Colour] =
+        // header bar fill, card values
+        SWITCH ( SELECTEDVALUE ( Queue[Brand] ), "KT Insurance", "#032316", "Club 4x4", "#0F2229", "#344054" )
+
+    MEASURE Calls[Brand Tint Colour] =
+        // light backgrounds (insights box)
+        SWITCH ( SELECTEDVALUE ( Queue[Brand] ), "KT Insurance", "#EAF8EE", "Club 4x4", "#E8F0F1", "#F2F4F7" )
+
+// Sanity check: Run the query. With Sep + Oct loaded expect 54,223 calls offered.
+EVALUATE
+    ROW ( "Calls Offered", [Calls Offered], "Service Level %", [Service Level %], "Avg CSAT", [Avg CSAT], "Conversion %", [Conversion %] )

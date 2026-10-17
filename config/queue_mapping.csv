@@ -25,3 +25,5 @@ ktpayments,KT_BILLING,KT Insurance,Billing,60,0.8,
 ktiretention,KT_RETENTION,KT Insurance,Retention,30,0.8,
 ktretain,KT_RETENTION,KT Insurance,Retention,30,0.8,
 kticlmstorm,KT_CLAIMS_LODGEMENT,KT Insurance,Claims Lodgement,60,0.8,Storm overflow queue opened 13/10/2026
+c4x4unlinked,CLUB4X4_UNLINKED,Club 4x4,Not linked to a call,60,0.8,CRM cases with no matching call in telephony: grouped by the CRM brand (no calls ever land here)
+ktunlinked,KT_UNLINKED,KT Insurance,Not linked to a call,60,0.8,CRM cases with no matching call in telephony: grouped by the CRM brand (no calls ever land here)

@@ -2,7 +2,7 @@
 PY := .venv/bin/python
 MONTH ?=
 
-.PHONY: setup db refresh demo test verify reset down data help
+.PHONY: setup db refresh demo test verify reset down data app help
 
 help:
 	@echo "make setup                 install, start MySQL, load September (first run)"
@@ -12,6 +12,7 @@ help:
 	@echo "make test                  unit tests"
 	@echo "make verify                data checks against the loaded database"
 	@echo "make down                  stop MySQL"
+	@echo "make app                   desktop runner: same pipeline, every stage shown live"
 
 .venv:
 	python3 -m venv .venv
@@ -48,3 +49,6 @@ down:
 
 data: .venv
 	$(PY) scripts/generate_mock_data.py
+
+app: .venv .env
+	$(PY) app.py

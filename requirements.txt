@@ -8,3 +8,4 @@ PyMySQL>=1.1,<2
 cryptography>=42        # MySQL 8 default auth (caching_sha2_password)
 python-dotenv>=1.0,<2
 pytest>=8,<10
+customtkinter>=5.2,<6   # optional desktop runner (app.py)

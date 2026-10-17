@@ -32,7 +32,7 @@ RETURN
 
 // Queues have different targets (Sales/Retention 80/30, others 80/60), so the
 // blended target is weighted by each queue's volume in the current filter context.
-SL Target % =                                                         // 0.0%
+Blended SL Target % =                                                   // 0.0%
 VAR QueueVolumes =
     ADDCOLUMNS (
         VALUES ( Queue[queue_id] ),
@@ -42,14 +42,14 @@ VAR QueueVolumes =
 RETURN
     DIVIDE ( SUMX ( QueueVolumes, [@offered] * [@target] ), SUMX ( QueueVolumes, [@offered] ) )
 
-SL vs Target (pts) = ( [Service Level %] - [SL Target %] ) * 100       // +0.0;-0.0
+SL vs Target (pts) = ( [Service Level %] - [Blended SL Target %] ) * 100       // +0.0;-0.0
 
 SL Status Colour =                                                    // use as Field value in conditional formatting
 SWITCH (
     TRUE (),
     ISBLANK ( [Service Level %] ), BLANK (),
-    [Service Level %] >= [SL Target %], "#1E7B34",
-    [Service Level %] >= [SL Target %] - 0.05, "#B54708",
+    [Service Level %] >= [Blended SL Target %], "#1E7B34",
+    [Service Level %] >= [Blended SL Target %] - 0.05, "#B54708",
     "#B42318"
 )
 
@@ -96,7 +96,7 @@ VAR WorkloadHours = DIVIDE ( SUM ( Calls[handle_sec] ), 3600 )
 RETURN
     DIVIDE ( WorkloadHours, TargetOccupancy )
 
-Staffing Gap (hrs) = [Required Hours] - [Scheduled Hours]             // +#,0;-#,0
+Staffing Gap (hrs) = ROUND ( [Required Hours], 0 ) - ROUND ( [Scheduled Hours], 0 )   // +#,0;-#,0  (whole hours so the cards reconcile)
 
 
 // ---------------------------------------------------------------- Customer experience  (home: Surveys)
@@ -113,7 +113,7 @@ VAR TopTwo = CALCULATE ( COUNTROWS ( Surveys ), Surveys[csat] >= 4 )
 RETURN
     DIVIDE ( TopTwo, Scored )
 
-NPS =                                                                 // 0.0
+NPS Score =                                                          // 0.0
 VAR Responses = CALCULATE ( COUNTROWS ( Surveys ), NOT ISBLANK ( Surveys[nps] ) )
 VAR Promoters = CALCULATE ( COUNTROWS ( Surveys ), Surveys[nps] >= 9 )
 VAR Detractors = CALCULATE ( COUNTROWS ( Surveys ), Surveys[nps] <= 6 )
@@ -194,6 +194,36 @@ VAR Prior = CALCULATE ( [Conversion %], DATEADD ( 'Date'[Date], -1, MONTH ) )
 RETURN
     IF ( NOT ISBLANK ( Prior ), ( [Conversion %] - Prior ) * 100 )
 
+// Reference labels for the Overview card tiles (the Card visual reserves label space for every tile,
+// so each tile gets one)
+Abandon Rate MoM (pts) =                                             // +0.0;-0.0
+VAR Prior = CALCULATE ( [Abandon Rate %], DATEADD ( 'Date'[Date], -1, MONTH ) )
+RETURN
+    IF ( NOT ISBLANK ( Prior ), ( [Abandon Rate %] - Prior ) * 100 )
+
+ASA MoM (sec) =                                                      // +0;-0
+VAR Prior = CALCULATE ( [ASA (sec)], DATEADD ( 'Date'[Date], -1, MONTH ) )
+RETURN
+    IF ( NOT ISBLANK ( Prior ), [ASA (sec)] - Prior )
+
+NPS MoM =                                                            // +0.0;-0.0
+VAR Prior = CALCULATE ( [NPS Score], DATEADD ( 'Date'[Date], -1, MONTH ) )
+RETURN
+    IF ( NOT ISBLANK ( Prior ), [NPS Score] - Prior )
+
+FCR MoM (pts) =                                                      // +0.0;-0.0
+VAR Prior = CALCULATE ( [FCR %], DATEADD ( 'Date'[Date], -1, MONTH ) )
+RETURN
+    IF ( NOT ISBLANK ( Prior ), ( [FCR %] - Prior ) * 100 )
+
+
+
+
+
+
+
+
+
 Calls Offered MTD = TOTALMTD ( [Calls Offered], 'Date'[Date] )        // #,0
 
 
@@ -202,12 +232,12 @@ Calls Offered MTD = TOTALMTD ( [Calls Offered], 'Date'[Date] )        // #,0
 Agent AHT vs Team (sec) =                                             // +0;-0
 VAR TeamAHT = CALCULATE ( [AHT (sec)], ALLEXCEPT ( Agent, Agent[Team] ) )
 RETURN
-    IF ( [Calls Answered] > 0, [AHT (sec)] - TeamAHT )
+    IF ( HASONEVALUE ( Agent[Agent] ) && [Calls Answered] > 0, [AHT (sec)] - TeamAHT )   // blank on totals
 
 Agent CSAT vs Team =                                                  // +0.00;-0.00
 VAR TeamCSAT = CALCULATE ( [Avg CSAT], ALLEXCEPT ( Agent, Agent[Team] ) )
 RETURN
-    IF ( [Survey Responses] > 0, [Avg CSAT] - TeamCSAT )
+    IF ( HASONEVALUE ( Agent[Agent] ) && [Survey Responses] > 0, [Avg CSAT] - TeamCSAT )
 
 Agent AHT Rank =                                                      // 0  (1 = fastest)
 IF (
@@ -230,10 +260,12 @@ IF (
 
 // ---------------------------------------------------------------- Narrative & labels  (home: Calls)
 
-Report Title =
-"Contact Centre Performance | "
-    & SELECTEDVALUE ( 'Date'[Reporting Month], "Multiple months" )
-    & " | " & SELECTEDVALUE ( Queue[Brand], "All brands" )
+Report Title =                                                        // Australian month format: 10-2026
+VAR MonthStart = SELECTEDVALUE ( 'Date'[Month Start] )
+RETURN
+    "Contact Centre Performance | "
+        & IF ( ISBLANK ( MonthStart ), "Multiple months", FORMAT ( MonthStart, "mm-yyyy" ) )
+        & " | " & SELECTEDVALUE ( Queue[Brand], "All brands" )
 
 Data As At =
 "Data to " & FORMAT ( MAX ( Calls[call_date] ), "d mmm yyyy" )
@@ -269,3 +301,169 @@ RETURN
             & " (" & FORMAT ( MAXX ( Worst, [@repeats] ), "#,0" ) & " repeats, FCR "
             & FORMAT ( MAXX ( Worst, [@fcr] ), "0%" ) & ")"
     )
+
+// Page 2 insights: where demand outran the forecast, which day was most short-staffed, and the weakest hour
+Biggest Forecast Miss =
+VAR ByQueue =
+    FILTER (
+        ADDCOLUMNS (
+            VALUES ( Queue[queue_id] ),
+            "@name", CALCULATE ( MAX ( Queue[Brand] ) ) & " " & CALCULATE ( MAX ( Queue[Queue] ) ),
+            "@var", [Forecast Variance %],
+            "@sl", [Service Level %]
+        ),
+        NOT ISBLANK ( [@var] )
+    )
+VAR Worst = TOPN ( 1, ByQueue, [@var], DESC, Queue[queue_id], ASC )
+RETURN
+    IF (
+        NOT ISEMPTY ( Worst ),
+        "Biggest forecast miss: " & MAXX ( Worst, [@name] )
+            & " ran " & FORMAT ( MAXX ( Worst, [@var] ), "+0%;-0%" ) & " vs forecast, SL "
+            & FORMAT ( MAXX ( Worst, [@sl] ), "0%" )
+    )
+
+Largest Staffing Gap Day =
+VAR ByDay =
+    FILTER (
+        ADDCOLUMNS (
+            VALUES ( 'Date'[Date] ),
+            "@gap", [Staffing Gap (hrs)], "@req", [Required Hours], "@sched", [Scheduled Hours]
+        ),
+        NOT ISBLANK ( [@req] )
+    )
+VAR Worst = TOPN ( 1, ByDay, [@gap], DESC, 'Date'[Date], ASC )
+RETURN
+    IF (
+        NOT ISEMPTY ( Worst ),
+        IF (
+            MAXX ( Worst, [@gap] ) > 0,
+            "Most short-staffed: " & FORMAT ( MAXX ( Worst, 'Date'[Date] ), "ddd d mmm" ) & ", "
+                & FORMAT ( MAXX ( Worst, [@gap] ), "#,0" ) & " hrs short ("
+                & FORMAT ( MAXX ( Worst, [@req] ), "#,0" ) & " needed vs "
+                & FORMAT ( MAXX ( Worst, [@sched] ), "#,0" ) & " rostered)",
+            "Rostered hours covered demand every day"
+        )
+    )
+
+Weakest Hour =
+VAR ByHour =
+    FILTER (
+        ADDCOLUMNS ( VALUES ( Calls[hour_of_day] ), "@sl", [Service Level %], "@calls", [Calls Offered] ),
+        [@calls] >= 100                                               // ignore thin hours
+    )
+VAR Worst = TOPN ( 1, ByHour, [@sl], ASC, Calls[hour_of_day], ASC )
+RETURN
+    IF (
+        NOT ISEMPTY ( Worst ),
+        "Weakest hour: " & FORMAT ( MAXX ( Worst, Calls[hour_of_day] ), "00" ) & ":00 at "
+            & FORMAT ( MAXX ( Worst, [@sl] ), "0%" ) & " SL across "
+            & FORMAT ( MAXX ( Worst, [@calls] ), "#,0" ) & " calls"
+    )
+
+// Page 3 insights. Agents are iterated with their Team so the "vs Team" measures keep the team filter.
+// The Unassigned team holds calls answered by logins not on the roster, so it is never ranked.
+Agent Role Model =
+VAR Agents =
+    FILTER (
+        ADDCOLUMNS (
+            SUMMARIZE ( Agent, Agent[employee_id], Agent[Agent], Agent[Team] ),
+            "@calls", [Calls Answered], "@surveys", [Survey Responses],
+            "@ahtvs", [Agent AHT vs Team (sec)], "@csat", [Avg CSAT], "@csatvs", [Agent CSAT vs Team]
+        ),
+        Agent[Team] <> "Unassigned" && [@calls] >= 100 && [@surveys] >= 10
+            && [@ahtvs] < 0 && [@csatvs] > 0
+    )
+VAR Best = TOPN ( 1, Agents, [@ahtvs], ASC, Agent[employee_id], ASC )
+RETURN
+    IF (
+        NOT ISEMPTY ( Best ),
+        "Role model: " & MAXX ( Best, Agent[Agent] ) & " (" & MAXX ( Best, Agent[Team] ) & "), "
+            & FORMAT ( -MAXX ( Best, [@ahtvs] ), "0" ) & "s faster than team with CSAT "
+            & FORMAT ( MAXX ( Best, [@csat] ), "0.00" ),
+        "No agent beat their team on both AHT and CSAT"
+    )
+
+Agent Coaching Focus =
+VAR Agents =
+    FILTER (
+        ADDCOLUMNS (
+            SUMMARIZE ( Agent, Agent[employee_id], Agent[Agent], Agent[Team] ),
+            "@calls", [Calls Answered], "@ahtvs", [Agent AHT vs Team (sec)]
+        ),
+        Agent[Team] <> "Unassigned" && [@calls] >= 100
+    )
+VAR Worst = TOPN ( 1, Agents, [@ahtvs], DESC, Agent[employee_id], ASC )
+RETURN
+    IF (
+        NOT ISEMPTY ( Worst ) && MAXX ( Worst, [@ahtvs] ) > 0,
+        "Coaching focus: " & MAXX ( Worst, Agent[Agent] ) & " (" & MAXX ( Worst, Agent[Team] ) & "), AHT "
+            & FORMAT ( MAXX ( Worst, [@ahtvs] ), "+0" ) & "s vs team across "
+            & FORMAT ( MAXX ( Worst, [@calls] ), "#,0" ) & " calls"
+    )
+
+Highest Transfer Team =
+VAR Teams =
+    FILTER (
+        ADDCOLUMNS ( VALUES ( Agent[Team] ), "@tr", [Transfer Rate %], "@calls", [Calls Answered] ),
+        Agent[Team] <> "Unassigned" && [@calls] > 0
+    )
+VAR Worst = TOPN ( 1, Teams, [@tr], DESC, Agent[Team], ASC )
+VAR Centre = CALCULATE ( [Transfer Rate %], Agent[Team] <> "Unassigned" )
+RETURN
+    IF (
+        NOT ISEMPTY ( Worst ),
+        "Highest transfers: " & MAXX ( Worst, Agent[Team] ) & " at " & FORMAT ( MAXX ( Worst, [@tr] ), "0.0%" )
+            & " of answered calls (centre " & FORMAT ( Centre, "0.0%" ) & ")"
+    )
+
+// Page 4 insights (with Top Repeat Reason above): best-selling product and the queue customers rate lowest
+Top Product =
+VAR ByProduct =
+    FILTER (
+        ADDCOLUMNS (
+            VALUES ( Interactions[product] ),
+            "@sold", [Policies Sold], "@premium", [Premium Written], "@avg", [Avg Premium]
+        ),
+        NOT ISBLANK ( Interactions[product] ) && [@sold] > 0
+    )
+VAR Best = TOPN ( 1, ByProduct, [@premium], DESC, Interactions[product], ASC )
+RETURN
+    IF (
+        NOT ISEMPTY ( Best ),
+        "Top product: " & MAXX ( Best, Interactions[product] ) & ", "
+            & FORMAT ( MAXX ( Best, [@sold] ), "#,0" ) & " policies, $"
+            & FORMAT ( MAXX ( Best, [@premium] ) / 1000000, "0.00" ) & "M premium (avg $"
+            & FORMAT ( MAXX ( Best, [@avg] ), "#,0" ) & ")"
+    )
+
+Lowest NPS Queue =
+VAR ByQueue =
+    FILTER (
+        ADDCOLUMNS (
+            VALUES ( Queue[queue_id] ),
+            "@name", CALCULATE ( MAX ( Queue[Brand] ) ) & " " & CALCULATE ( MAX ( Queue[Queue] ) ),
+            "@nps", [NPS Score],
+            "@n", CALCULATE ( COUNTROWS ( Surveys ), NOT ISBLANK ( Surveys[nps] ) )
+        ),
+        [@n] >= 30                                                    // ignore queues with too few responses
+    )
+VAR Worst = TOPN ( 1, ByQueue, [@nps], ASC, Queue[queue_id], ASC )
+RETURN
+    IF (
+        NOT ISEMPTY ( Worst ),
+        "Lowest NPS: " & MAXX ( Worst, [@name] ) & " at " & FORMAT ( MAXX ( Worst, [@nps] ), "0.0" )
+            & " (" & FORMAT ( MAXX ( Worst, [@n] ), "#,0" ) & " responses)"
+    )
+
+// Brand colours, taken from each brand's website. A theme can't change with a slicer, but any formatting
+// option with an fx button can use these as Field value, so the page takes on the brand picked in the
+// Brand slicer and falls back to a grey group look for All brands. Lines and legends ignore fx: see POWERBI_SETUP.md.
+Brand Accent Colour =                                                 // bars, title text, accent strips
+SWITCH ( SELECTEDVALUE ( Queue[Brand] ), "KT Insurance", "#0CA630", "Club 4x4", "#1C3F4C", "#667085" )
+
+Brand Dark Colour =                                                   // header bar fill, card values
+SWITCH ( SELECTEDVALUE ( Queue[Brand] ), "KT Insurance", "#032316", "Club 4x4", "#0F2229", "#344054" )
+
+Brand Tint Colour =                                                   // light backgrounds (insights box)
+SWITCH ( SELECTEDVALUE ( Queue[Brand] ), "KT Insurance", "#EAF8EE", "Club 4x4", "#E8F0F1", "#F2F4F7" )

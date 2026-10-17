@@ -17,6 +17,32 @@ at the warehouse (or a gateway) instead. Only the source step changes; the measu
 
 ---
 
+## Using the included report (`contact_centre.pbix`)
+
+[`contact_centre.pbix`](contact_centre.pbix) is the finished four-page report (Overview, Queues & Staffing, Agents,
+Customers & Sales) with **September** loaded, as it stood before the October files arrived. Open it in **Power BI
+Desktop** and every page works straight away (month-on-month shows "--": there is no August). Connect it to your
+own pipeline as below, run the October refresh, click Refresh, and watch it roll forward to October.
+
+It was built in Power BI web against the workbook in OneDrive, so its 8 queries still point at that OneDrive
+address. To connect it to **your own** pipeline runs instead:
+
+1. **Home → Transform data**. In the Power Query Editor, select `Agent`, then its **Source** step under
+   *Applied steps*.
+2. Replace the formula in the formula bar with (use your clone's path):
+   ```
+   = Excel.Workbook(File.Contents("C:\eda-contact-centre-pipeline\output\powerbi\contact_centre_model.xlsx"), null, true)
+   ```
+3. Do the same for `Calls`, `Date`, `Forecast`, `Interactions`, `Queue`, `RefreshLog` and `Surveys` (paste the same
+   formula; only the Source step changes).
+4. **Close & Apply**. If asked about privacy levels, choose *Organizational*.
+
+From then on the monthly loop is: `make refresh` (or **Run monthly refresh** in `python app.py`), then **Home →
+Refresh** in Power BI. Run `make setup` first and the report shows September only; refresh after October loads and
+the Month slicer's *Latest month* moves to October by itself.
+
+---
+
 ## Option A: Power BI web (works on a Mac)
 
 ### 1. Point the pipeline at OneDrive
@@ -48,6 +74,20 @@ the file's OneDrive link (Organisational account sign-in). It's still a cloud so
 
 **Sort by column:** `Date[Day Name]` by `Date[Day of Week]`, `Date[Month]` by `Date[Month Number]`.
 
+**Reporting Month as text:** in Power Query set `Date[Reporting Month]` (and `RefreshLog[Reporting Month]`) to
+*Text*, otherwise "2026-09" is auto-detected as a date.
+
+**Month Selector** (calculated column on `Date`, used by the Month slicer). "Latest month" always points at the newest
+loaded month, so after each refresh the report rolls forward without anyone touching the slicer:
+
+```
+Month Selector =
+VAR LatestStart = MAX ( 'Date'[Month Start] )
+RETURN IF ( 'Date'[Month Start] = LatestStart, "Latest month", FORMAT ( 'Date'[Month Start], "mm-yyyy" ) )
+```
+
+Sort it by `Date[Month Start]` so months stay in date order across years.
+
 **Relationships** (all many-to-one, single direction, from fact to dimension):
 
 | From (many)              | To (one)            |
@@ -66,7 +106,11 @@ the file's OneDrive link (Organisational account sign-in). It's still a cloud so
 
 Hide the key columns (`date_key`, `queue_id`, `employee_id`, `interaction_id`) in report view.
 
-**Measures:** add each measure from [`measures.dax`](measures.dax) with *New measure*, on the home table noted in
+**Measures, fastest way:** open **DAX query view → New query**, paste [`measures_bulk.dax`](measures_bulk.dax) (every measure in one `DEFINE` block, rebuilt by `python scripts/build_bulk_measures.py`), click **Update model**, then set the format strings shown in `measures.dax`.
+
+**Theme:** *View → Themes → Browse for themes* → [`eda_theme.json`](eda_theme.json) (neutral base; the brand colours switch via the `Brand … Colour` measures used as *fx* field values).
+
+**Or one at a time:** add each measure from [`measures.dax`](measures.dax) with *New measure*, on the home table noted in
 the comments, and set the format string shown. Optional tidy-up: *New table* → `_Measures = { BLANK() }`, hide its
 column, and keep all measures there.
 
@@ -79,15 +123,15 @@ After running October, **Refresh now** if you don't want to wait.
 Suggested four pages. Every number comes from a measure, so all pages respond to the Month and Brand slicers.
 
 **1. Overview**
-- Slicers: `Date[Reporting Month]`, `Queue[Brand]`
+- Slicers: `Date[Month Selector]` (select *Latest month*), `Queue[Brand]`
 - Cards: Calls Offered (+ Calls Offered MoM %), Service Level % (+ SL vs Target), Abandon Rate %, ASA, AHT (mm:ss),
-  Avg CSAT, NPS, FCR %, Conversion %
+  Avg CSAT, NPS Score, FCR %, Conversion %
 - Line and column chart: `Date[Date]` × Calls Offered (columns), Forecast Offered (line), Service Level % (secondary axis)
 - Text boxes: `Report Title`, `Data As At`, `Worst SL Day`, `Top Repeat Reason`
 
 **2. Queues and staffing**
 - Matrix: rows `Queue[Brand]` → `Queue[Queue]`; values Offered, Forecast Offered, Forecast Variance %, Service Level %,
-  SL Target %, Abandon Rate %, ASA, AHT. Conditional formatting on Service Level % → *Field value* → `SL Status Colour`
+  Blended SL Target %, Abandon Rate %, ASA, AHT. Conditional formatting on Service Level % → *Field value* → `SL Status Colour`
 - Heatmap matrix: rows `Date[Day Name]`, columns `Calls[hour_of_day]`, value Service Level %, background colour scale
 - Clustered columns: `Date[Date]` × Required Hours vs Scheduled Hours
 
@@ -99,7 +143,7 @@ Suggested four pages. Every number comes from a measure, so all pages respond to
 **4. Customers and sales**
 - Bar: `Interactions[contact_reason]` × Repeat Contacts, tooltip FCR %
 - Columns: `Interactions[product]` × Policies Sold and Premium Written
-- NPS and CSAT by `Queue[Brand]` and `Queue[Queue]`
+- NPS Score and CSAT by `Queue[Brand]` and `Queue[Queue]`
 - Table: `Surveys[verbatim]`, `Surveys[csat]` filtered to CSAT ≤ 2 (what unhappy customers say)
 
 ### 6. Share it
@@ -116,5 +160,4 @@ Either:
 - **Get data → MySQL database** → server `localhost:3307`, database `contact_centre`. Import the tables
   directly (the queries in `sql/exports/` show exactly what each model table contains).
 
-If you were given the `.pbix`: **Transform data → Data source settings → Change source** and point it at your own
-`output/powerbi/contact_centre_model.xlsx`, then **Refresh**.
+To use the finished report instead of building one, see [Using the included report](#using-the-included-report-contact_centrepbix) above.
