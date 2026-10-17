@@ -17,7 +17,7 @@ command (or one button).
 | **2 min** | ▶️ [Walkthrough video](https://youtu.be/wBzwNJgLSO8): October's files arrive, the refresh runs, the report rolls forward |
 | **5 min** | [What October shows](#what-october-shows) and [the dashboard](#the-dashboard) |
 | **20 min** | [Run it yourself](#run-it-yourself) in the [Refresh Console](#refresh-console): load September, refresh October, watch every stage, then repoint and refresh the included Power BI report |
-| **No install** | [Every push runs the full Sep → Oct refresh in CI](https://github.com/yashbagia1708/eda-contact-centre-pipeline/actions): tests, both months, a re-run of October, 12 checks |
+| **No install** | [Run it on GitHub](#cant-run-docker-run-it-on-github-instead): one click reruns the full Sep → Oct refresh on a clean machine, and the KPI packs download from the run |
 | **Deeper** | [How it works](#how-it-works), the [data problems it handles](#the-mess-it-handles), [SQL](sql/), [DAX](powerbi/measures.dax) |
 
 [![Walkthrough video](https://img.youtube.com/vi/wBzwNJgLSO8/hqdefault.jpg)](https://youtu.be/wBzwNJgLSO8)
@@ -69,6 +69,19 @@ Needs **Docker Desktop** (running) and **Python 3.11+**.
 git clone https://github.com/yashbagia1708/eda-contact-centre-pipeline.git
 cd eda-contact-centre-pipeline
 ```
+
+### Can't run Docker? Run it on GitHub instead
+
+Work laptops often block Docker. The whole refresh also runs on GitHub's servers, with nothing to install:
+
+1. Open **[Actions → pipeline](https://github.com/yashbagia1708/eda-contact-centre-pipeline/actions/workflows/pipeline.yml)** and click **Run workflow → Run workflow**.
+2. In about 3 minutes a fresh machine starts an empty MySQL 8, runs the unit tests, loads September, finds and
+   loads October (schema drift mapped, bad rows quarantined), re-runs October to prove nothing double counts, and
+   passes the 12 reconciliation checks. Expand any step to read its log.
+3. Under **Artifacts** at the bottom of the run, download **outputs**: the Power BI model workbook, both monthly
+   KPI packs (Excel), the run logs and the quarantined rows.
+
+Every push runs the same job, so the [latest runs](https://github.com/yashbagia1708/eda-contact-centre-pipeline/actions) are already there to look at.
 
 ### Refresh Console
 
