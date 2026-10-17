@@ -6,7 +6,8 @@
   "image": "mcr.microsoft.com/devcontainers/python:3.12",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": { "moby": false },
-    "ghcr.io/devcontainers/features/desktop-lite:1": { "password": "noPassword" }
+    "ghcr.io/devcontainers/features/desktop-lite:1": { "password": "noPassword" },
+    "ghcr.io/devcontainers/features/sshd:1": {}
   },
   "containerEnv": {
     "DISPLAY": ":1",
