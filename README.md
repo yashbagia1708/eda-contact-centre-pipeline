@@ -70,7 +70,7 @@ git clone https://github.com/yashbagia1708/eda-contact-centre-pipeline.git
 cd eda-contact-centre-pipeline
 ```
 
-No Docker or Python on this machine? Use [Codespaces](#no-docker-run-it-in-your-browser-with-github-codespaces) (the Refresh Console in your browser) or [GitHub Actions](#or-just-watch-the-pipeline-run-on-github-actions) (one click, no window).
+No Docker or Python on this machine? Use [Codespaces](#no-docker-run-it-in-your-browser-with-github-codespaces) (the Refresh Console in your browser) or [GitHub Actions](#or-just-watch-the-pipeline-run-on-github-actions) (one click, no app just the workflow).
 
 ### Refresh Console
 
