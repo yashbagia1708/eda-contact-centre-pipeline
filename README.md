@@ -17,7 +17,7 @@ command (or one button).
 | **2 min** | ▶️ [Walkthrough video](https://youtu.be/wBzwNJgLSO8): October's files arrive, the refresh runs, the report rolls forward |
 | **5 min** | [What October shows](#what-october-shows) and [the dashboard](#the-dashboard) |
 | **20 min** | [Run it yourself](#run-it-yourself) in the [Refresh Console](#refresh-console): load September, refresh October, watch every stage, then repoint and refresh the included Power BI report |
-| **No install** | [Run it on GitHub](#cant-run-docker-run-it-on-github-instead): one click reruns the full Sep → Oct refresh on a clean machine, and the KPI packs download from the run |
+| **No install** | [Run it on GitHub](#cant-run-docker-run-it-on-github-instead): one click reruns the full Sep → Oct refresh on a clean machine, or [open it in your browser](#or-open-everything-in-your-browser-github-codespaces), Refresh Console included |
 | **Deeper** | [How it works](#how-it-works), the [data problems it handles](#the-mess-it-handles), [SQL](sql/), [DAX](powerbi/measures.dax) |
 
 [![Walkthrough video](https://img.youtube.com/vi/wBzwNJgLSO8/hqdefault.jpg)](https://youtu.be/wBzwNJgLSO8)
@@ -81,10 +81,27 @@ Work laptops often block Docker. The whole refresh also runs on GitHub's servers
 3. Under **Artifacts** at the bottom of the run, download **outputs**: the Power BI model workbook, both monthly
    KPI packs (Excel), the run logs and the quarantined rows.
 
-The Refresh Console is a desktop window, so it runs on your own machine: GitHub's runners have no screen to show it
-on. This run is the same pipeline without the window: the same stages, logs, checks and outputs.
+The Refresh Console is a desktop window, so it doesn't run in Actions: GitHub's runners have no screen to show it
+on. This run is the same pipeline without the window: the same stages, logs, checks and outputs. To use the Refresh
+Console without installing anything, [open the repo in a codespace](#or-open-everything-in-your-browser-github-codespaces).
 
 Every push runs the same job, so the [latest runs](https://github.com/yashbagia1708/eda-contact-centre-pipeline/actions) are already there to look at.
+
+### Or open everything in your browser (GitHub Codespaces)
+
+The closest thing to running it yourself without installing anything, Refresh Console included:
+
+1. On the repo page, click **Code → Codespaces → Create codespace on main**. The first start takes about 5
+   minutes; it installs Python, Docker and the packages for you.
+2. In the **Ports** tab, open **Desktop (Refresh Console)** (port 6080) in the browser and click **Connect**.
+3. In the codespace terminal, run `python app.py`. The Refresh Console opens on that browser desktop, starts MySQL
+   itself, and works as below: **Start fresh**, then **Run monthly refresh**.
+
+Outputs land in `output/` in the codespace (right-click a file in the Explorer → **Download** to open a KPI pack in
+Excel). Codespaces usage counts against your own GitHub account's free monthly allowance; delete the codespace when
+you're done (**Code → Codespaces → … → Delete**).
+
+![Refresh Console running in a codespace](docs/codespaces_console.png)
 
 ### Refresh Console
 
@@ -288,6 +305,7 @@ pipeline/                    extract → transform → quality → load → expo
 sql/                         schema, merges, views, exports, report queries
 powerbi/                     the report (.pbix), DAX measures, theme, setup guide
 scripts/                     mock data generator, post-load verification
+.devcontainer/               GitHub Codespaces setup: Python, Docker for MySQL, a browser desktop for the console
 docs/                        dashboard and Refresh Console screenshots
 tests/                       unit tests for cleaning rules
 .github/workflows/           CI: tests + full Sep→Oct refresh + idempotency + verification
