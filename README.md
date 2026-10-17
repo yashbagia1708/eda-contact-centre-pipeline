@@ -1,5 +1,7 @@
 # Contact Centre Reporting Pipeline: KT Insurance & Club 4x4
 
+[![pipeline](https://github.com/yashbagia1708/eda-contact-centre-pipeline/actions/workflows/pipeline.yml/badge.svg)](https://github.com/yashbagia1708/eda-contact-centre-pipeline/actions/workflows/pipeline.yml)
+
 A monthly refresh for an insurance contact centre, end to end. Four source systems that disagree with each other
 are cleaned and conformed in **Python**, modelled and analysed in **MySQL**, and served to **Power BI** plus a
 formatted Excel KPI pack. September is the baseline; October arrives as a new drop of files and is loaded with one
@@ -15,6 +17,7 @@ command (or one button).
 | **2 min** | ▶️ [Walkthrough video](https://youtu.be/wBzwNJgLSO8): October's files arrive, the refresh runs, the report rolls forward |
 | **5 min** | [What October shows](#what-october-shows) and [the dashboard](#the-dashboard) |
 | **20 min** | [Run it yourself](#run-it-yourself): two commands, or the desktop app, then refresh the included Power BI report |
+| **No install** | [Every push runs the full Sep → Oct refresh in CI](https://github.com/yashbagia1708/eda-contact-centre-pipeline/actions): tests, both months, a re-run of October, 12 checks |
 | **Deeper** | [How it works](#how-it-works), the [data problems it handles](#the-mess-it-handles), [SQL](sql/), [DAX](powerbi/measures.dax) |
 
 [![Walkthrough video](https://img.youtube.com/vi/wBzwNJgLSO8/hqdefault.jpg)](https://youtu.be/wBzwNJgLSO8)
@@ -61,7 +64,14 @@ and it moves to October.
 
 ## Run it yourself
 
-Needs **Docker Desktop** and **Python 3.11+**. Clone the repo, then:
+Needs **Docker Desktop** and **Python 3.11+**.
+
+```bash
+git clone https://github.com/yashbagia1708/eda-contact-centre-pipeline.git
+cd eda-contact-centre-pipeline
+```
+
+Then:
 
 **Windows (PowerShell)**
 
