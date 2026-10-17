@@ -12,7 +12,7 @@ help:
 	@echo "make test                  unit tests"
 	@echo "make verify                data checks against the loaded database"
 	@echo "make down                  stop MySQL"
-	@echo "make app                   desktop runner: same pipeline, every stage shown live"
+	@echo "make app                   Refresh Console: run and watch the monthly refresh"
 
 .venv:
 	python3 -m venv .venv

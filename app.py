@@ -1,5 +1,5 @@
 """
-Interactive runner for the monthly refresh.
+Refresh Console: an interactive window over the monthly refresh.
 
     python app.py          (or: make app)
 
@@ -145,7 +145,7 @@ class QueueLogHandler(logging.Handler):
 class App(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("EDA Contact Centre · Monthly Refresh")
+        self.title("Refresh Console · EDA Contact Centre")
         self.geometry("1220x820")
         self.minsize(1080, 720)
         self.events: queue.Queue = queue.Queue()
@@ -170,9 +170,9 @@ class App(ctk.CTk):
 
         header = ctk.CTkFrame(self, corner_radius=0, fg_color=ACCENT)
         header.grid(row=0, column=0, columnspan=2, sticky="ew")
-        ctk.CTkLabel(header, text="Contact Centre Monthly Refresh", text_color="white",
+        ctk.CTkLabel(header, text="Refresh Console", text_color="white",
                      font=ctk.CTkFont(size=22, weight="bold")).pack(side="left", padx=20, pady=(14, 14))
-        ctk.CTkLabel(header, text="KT Insurance & Club 4x4  ·  Mock data", text_color="#D0D5DD",
+        ctk.CTkLabel(header, text="Contact centre monthly refresh  ·  KT Insurance & Club 4x4  ·  Mock data", text_color="#D0D5DD",
                      font=ctk.CTkFont(size=13)).pack(side="left", padx=4)
         self.status_label = ctk.CTkLabel(header, text="", text_color="white", font=ctk.CTkFont(size=13))
         self.status_label.pack(side="right", padx=20)

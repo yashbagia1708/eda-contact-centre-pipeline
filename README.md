@@ -16,7 +16,7 @@ command (or one button).
 |---|---|
 | **2 min** | ▶️ [Walkthrough video](https://youtu.be/wBzwNJgLSO8): October's files arrive, the refresh runs, the report rolls forward |
 | **5 min** | [What October shows](#what-october-shows) and [the dashboard](#the-dashboard) |
-| **20 min** | [Run it yourself](#run-it-yourself): two commands, or the desktop app, then refresh the included Power BI report |
+| **20 min** | [Run it yourself](#run-it-yourself) in the [Refresh Console](#refresh-console): load September, refresh October, watch every stage, then refresh the included Power BI report |
 | **No install** | [Every push runs the full Sep → Oct refresh in CI](https://github.com/yashbagia1708/eda-contact-centre-pipeline/actions): tests, both months, a re-run of October, 12 checks |
 | **Deeper** | [How it works](#how-it-works), the [data problems it handles](#the-mess-it-handles), [SQL](sql/), [DAX](powerbi/measures.dax) |
 
@@ -64,27 +64,45 @@ and it moves to October.
 
 ## Run it yourself
 
-Needs **Docker Desktop** and **Python 3.11+**.
+Needs **Docker Desktop** (running) and **Python 3.11+**.
 
 ```bash
 git clone https://github.com/yashbagia1708/eda-contact-centre-pipeline.git
 cd eda-contact-centre-pipeline
 ```
 
-Then:
+### Refresh Console
 
-**Windows (PowerShell)**
+The monthly refresh in one window. It checks Docker and MySQL (and starts the database if needed), watches the
+source folder so a new month lights up the moment its files land, and runs the pipeline with every stage lit up as it
+goes: row counts, data-quality findings, 12 reconciliation checks, then the hand-off to Power BI. Click any stage to
+see what it does and why.
 
-```powershell
-python -m venv .venv; .venv\Scripts\activate
-pip install -r requirements.txt
-copy .env.example .env
-docker compose up -d --wait
-python -m pipeline.run --month 2026-09   # baseline: September
-python -m pipeline.run                   # the monthly refresh: loads October, the next month waiting
-python scripts\verify.py                 # 12 reconciliation checks
-python app.py                            # optional: the desktop runner (below)
-```
+![Refresh Console after the October refresh](docs/refresh_console.png)
+
+**Open it**
+
+| Mac / Linux | Windows (PowerShell, no activation needed) |
+|---|---|
+| `make app` | `python -m venv .venv`<br>`.venv\Scripts\python -m pip install -r requirements.txt`<br>`copy .env.example .env`<br>`.venv\Scripts\python app.py` |
+
+**Use it**
+
+1. **Start fresh** loads September, the baseline (25,520 calls, 12/12 checks).
+2. **Run monthly refresh** loads the next month waiting in `data/raw`, which is October: watch the schema drift get
+   mapped, 21 rows quarantined, and the checks pass.
+3. **Open Power BI to refresh** opens the report: refresh it and it rolls forward to October.
+
+Shortcuts: ⌘R / Ctrl+R refresh, ⌘⇧F / Ctrl+Shift+F start fresh.
+
+### Then Power BI
+
+Open [`powerbi/contact_centre.pbix`](powerbi/contact_centre.pbix) in Power BI Desktop. It opens on September. Point it
+at your local output once ([2-minute steps](powerbi/POWERBI_SETUP.md#using-the-included-report-contact_centrepbix)),
+click Refresh, and it rolls forward to October.
+
+<details>
+<summary><b>Prefer the command line?</b> The same pipeline without the window, plus outputs and extra commands</summary>
 
 **Mac / Linux**
 
@@ -93,24 +111,19 @@ make setup      # venv + MySQL container + loads September
 make refresh    # the monthly refresh: loads October, the next month waiting in data/raw
 make verify     # 12 reconciliation checks against the database
 make test       # unit tests
-make app        # optional: the desktop runner (below)
 ```
 
-**Then Power BI:** open [`powerbi/contact_centre.pbix`](powerbi/contact_centre.pbix) in Power BI Desktop. It opens on
-September. Point it at your local output once ([2-minute steps](powerbi/POWERBI_SETUP.md#using-the-included-report-contact_centrepbix)),
-click Refresh, and it rolls forward to October.
+**Windows (PowerShell)**
 
-### The desktop runner
-
-`make app` (or `python app.py`) opens a desktop runner over the same pipeline. It checks Docker
-and MySQL (and starts the container if needed), watches the source folder so a new month lights up the moment its
-files land, and has two buttons: **Start fresh** (load the baseline month) and **Run monthly refresh** (load the next
-month, then reconcile). Each stage lights up as it runs with its row counts and data-quality findings; click any stage
-to see what it does and why.
-
-![Desktop runner after the October refresh](docs/app_runner.png)
-
-### More commands and outputs
+```powershell
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+copy .env.example .env
+docker compose up -d --wait
+.venv\Scripts\python -m pipeline.run --month 2026-09   # baseline: September
+.venv\Scripts\python -m pipeline.run                   # the monthly refresh: loads October
+.venv\Scripts\python scripts\verify.py                 # 12 reconciliation checks
+```
 
 Other commands: `make refresh MONTH=2026-10` (reload a specific month), `make demo` (clean slate, load everything),
 `make down`. MySQL is exposed on **localhost:3307** (user `eda` / `eda_pass`), so you can explore it in MySQL Workbench.
@@ -124,6 +137,8 @@ Other commands: `make refresh MONTH=2026-10` (reload a specific month), `make de
 | Data quality | `output/logs/dq_report_YYYY-MM.json`, `output/rejects/YYYY-MM/` | What was fixed, what was quarantined and why |
 
 Building the Power BI model from scratch instead (web on a Mac, or Desktop): [`powerbi/POWERBI_SETUP.md`](powerbi/POWERBI_SETUP.md).
+
+</details>
 
 ## How it works
 
@@ -233,13 +248,13 @@ so nobody has to click Refresh.
 ```
 config/queue_mapping.csv     business-owned mapping of raw queue names → queue, brand, SL target
 data/raw/YYYY-MM/            monthly source drops (mock)
-app.py                       optional desktop runner over the same pipeline (CustomTkinter)
+app.py                       Refresh Console: the monthly refresh in one window (CustomTkinter)
 pipeline/                    extract → transform → quality → load → export, orchestrated by run.py;
                              checks.py holds the post-load reconciliation checks
 sql/                         schema, merges, views, exports, report queries
 powerbi/                     the report (.pbix), DAX measures, theme, setup guide
 scripts/                     mock data generator, post-load verification
-docs/                        dashboard and app screenshots
+docs/                        dashboard and Refresh Console screenshots
 tests/                       unit tests for cleaning rules
 .github/workflows/           CI: tests + full Sep→Oct refresh + idempotency + verification
 ```
