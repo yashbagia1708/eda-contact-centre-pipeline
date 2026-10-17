@@ -81,6 +81,9 @@ Work laptops often block Docker. The whole refresh also runs on GitHub's servers
 3. Under **Artifacts** at the bottom of the run, download **outputs**: the Power BI model workbook, both monthly
    KPI packs (Excel), the run logs and the quarantined rows.
 
+The Refresh Console is a desktop window, so it runs on your own machine: GitHub's runners have no screen to show it
+on. This run is the same pipeline without the window: the same stages, logs, checks and outputs.
+
 Every push runs the same job, so the [latest runs](https://github.com/yashbagia1708/eda-contact-centre-pipeline/actions) are already there to look at.
 
 ### Refresh Console
@@ -91,6 +94,10 @@ goes: row counts, data-quality findings, 12 reconciliation checks, then the hand
 see what it does and why.
 
 ![Refresh Console after the October refresh](docs/refresh_console.png)
+
+**Why a Python app and not an `.exe`?** One `app.py` runs the same on Windows and Mac, and it's readable code from
+this repo rather than an unsigned executable from an unknown sender, which corporate laptops typically block (Windows
+SmartScreen, endpoint protection) and email filters strip.
 
 **Open it**
 
