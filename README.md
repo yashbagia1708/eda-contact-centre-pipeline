@@ -16,7 +16,7 @@ command (or one button).
 |---|---|
 | **2 min** | ▶️ [Walkthrough video](https://youtu.be/wBzwNJgLSO8): October's files arrive, the refresh runs, the report rolls forward |
 | **5 min** | [What October shows](#what-october-shows) and [the dashboard](#the-dashboard) |
-| **20 min** | [Run it yourself](#run-it-yourself) in the [Refresh Console](#refresh-console): load September, refresh October, watch every stage, then refresh the included Power BI report |
+| **20 min** | [Run it yourself](#run-it-yourself) in the [Refresh Console](#refresh-console): load September, refresh October, watch every stage, then repoint and refresh the included Power BI report |
 | **No install** | [Every push runs the full Sep → Oct refresh in CI](https://github.com/yashbagia1708/eda-contact-centre-pipeline/actions): tests, both months, a re-run of October, 12 checks |
 | **Deeper** | [How it works](#how-it-works), the [data problems it handles](#the-mess-it-handles), [SQL](sql/), [DAX](powerbi/measures.dax) |
 
@@ -58,9 +58,8 @@ header and accents take on KT Insurance green or Club 4x4 teal when a brand is p
 **Customers & Sales**: repeat contacts by reason, product sales and premium, NPS by queue, what unhappy customers said.
 ![Customers and sales](docs/dashboard_customers.png)
 
-The report ships with **September** loaded ([before](docs/overview_september.png)). Connect it to your own run
-([steps](powerbi/POWERBI_SETUP.md#using-the-included-report-contact_centrepbix)), load October, click Refresh,
-and it moves to October.
+The report ships with **September** loaded ([before](docs/overview_september.png)). Repoint it once to your own
+output ([steps](#then-power-bi)), load October, click Refresh, and it moves to October.
 
 ## Run it yourself
 
@@ -97,9 +96,24 @@ Shortcuts: ⌘R / Ctrl+R refresh, ⌘⇧F / Ctrl+Shift+F start fresh.
 
 ### Then Power BI
 
-Open [`powerbi/contact_centre.pbix`](powerbi/contact_centre.pbix) in Power BI Desktop. It opens on September. Point it
-at your local output once ([2-minute steps](powerbi/POWERBI_SETUP.md#using-the-included-report-contact_centrepbix)),
-click Refresh, and it rolls forward to October.
+Open [`powerbi/contact_centre.pbix`](powerbi/contact_centre.pbix) in Power BI Desktop. It opens on **September** and
+every page works straight away.
+
+**Before you click Refresh, repoint it to your own output (one time, about 2 minutes).** The report was built in
+Power BI web against the author's OneDrive, so its 8 queries still point there; Refresh would ask for a sign-in you
+don't have. Point them at the workbook the pipeline wrote on your machine:
+
+1. **Home → Transform data**. In the Power Query Editor, select the `Agent` query, then its **Source** step under
+   *Applied steps*.
+2. Replace the formula in the formula bar with this, using the path of your clone:
+   ```
+   = Excel.Workbook(File.Contents("C:\eda-contact-centre-pipeline\output\powerbi\contact_centre_model.xlsx"), null, true)
+   ```
+3. Do the same for `Calls`, `Date`, `Forecast`, `Interactions`, `Queue`, `RefreshLog` and `Surveys`.
+4. **Close & Apply** (choose *Organizational* if asked about privacy levels).
+
+Now the loop works: **Run monthly refresh** in the Refresh Console (or `make refresh`), then **Refresh** in Power BI,
+and the report rolls forward to October on its own. More detail: [`POWERBI_SETUP.md`](powerbi/POWERBI_SETUP.md#using-the-included-report-contact_centrepbix).
 
 <details>
 <summary><b>Prefer the command line?</b> The same pipeline without the window, plus outputs and extra commands</summary>
