@@ -194,8 +194,7 @@ VAR Prior = CALCULATE ( [Conversion %], DATEADD ( 'Date'[Date], -1, MONTH ) )
 RETURN
     IF ( NOT ISBLANK ( Prior ), ( [Conversion %] - Prior ) * 100 )
 
-// Reference labels for the Overview card tiles (the Card visual reserves label space for every tile,
-// so each tile gets one)
+// Month-on-month labels for the Overview cards (the card visual leaves room for a label on every tile)
 Abandon Rate MoM (pts) =                                             // +0.0;-0.0
 VAR Prior = CALCULATE ( [Abandon Rate %], DATEADD ( 'Date'[Date], -1, MONTH ) )
 RETURN
@@ -260,7 +259,7 @@ IF (
 
 // ---------------------------------------------------------------- Narrative & labels  (home: Calls)
 
-Report Title =                                                        // Australian month format: 10-2026
+Report Title =                                                        // month shown as 10-2026
 VAR MonthStart = SELECTEDVALUE ( 'Date'[Month Start] )
 RETURN
     "Contact Centre Performance | "
@@ -302,7 +301,7 @@ RETURN
             & FORMAT ( MAXX ( Worst, [@fcr] ), "0%" ) & ")"
     )
 
-// Page 2 insights: where demand outran the forecast, which day was most short-staffed, and the weakest hour
+// Queues & staffing insights: biggest forecast miss, most short-staffed day, weakest hour
 Biggest Forecast Miss =
 VAR ByQueue =
     FILTER (
@@ -361,8 +360,8 @@ RETURN
             & FORMAT ( MAXX ( Worst, [@calls] ), "#,0" ) & " calls"
     )
 
-// Page 3 insights. Agents are iterated with their Team so the "vs Team" measures keep the team filter.
-// The Unassigned team holds calls answered by logins not on the roster, so it is never ranked.
+// Agent insights. Loop over agents together with their team so "vs Team" compares like for like.
+// Skip the Unassigned team (logins not on the roster): there's nobody there to coach.
 Agent Role Model =
 VAR Agents =
     FILTER (
@@ -417,7 +416,7 @@ RETURN
             & " of answered calls (centre " & FORMAT ( Centre, "0.0%" ) & ")"
     )
 
-// Page 4 insights (with Top Repeat Reason above): best-selling product and the queue customers rate lowest
+// Customers & sales insights (Top Repeat Reason is above): best-selling product, lowest-NPS queue
 Top Product =
 VAR ByProduct =
     FILTER (
@@ -456,9 +455,9 @@ RETURN
             & " (" & FORMAT ( MAXX ( Worst, [@n] ), "#,0" ) & " responses)"
     )
 
-// Brand colours, taken from each brand's website. A theme can't change with a slicer, but any formatting
-// option with an fx button can use these as Field value, so the page takes on the brand picked in the
-// Brand slicer and falls back to a grey group look for All brands. Lines and legends ignore fx: see POWERBI_SETUP.md.
+// Brand colours from each brand's website. A theme can't follow a slicer, so use these as fx field values:
+// the page takes on the brand picked in the Brand slicer, and goes grey for All brands.
+// (Lines and legends can't use fx; see POWERBI_SETUP.md.)
 Brand Accent Colour =                                                 // bars, title text, accent strips
 SWITCH ( SELECTEDVALUE ( Queue[Brand] ), "KT Insurance", "#0CA630", "Club 4x4", "#1C3F4C", "#667085" )
 

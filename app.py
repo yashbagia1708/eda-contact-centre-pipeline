@@ -1,12 +1,11 @@
 """
-Refresh Console: an interactive window over the monthly refresh.
+Refresh Console: a small desktop app for running the monthly refresh.
 
     python app.py          (or: make app)
 
-Shows whether Docker and MySQL are ready, which months have arrived and which are already loaded,
-and runs the same pipeline as `make setup` / `make refresh` + `make verify`, lighting up each stage
-as it runs. Click any stage to see what it does and why. Nothing here is required: the command line
-path works on its own, and this window only calls the same functions.
+Check Docker and MySQL, show which months have arrived and which are loaded, then run the same pipeline
+as `make setup` / `make refresh` + `make verify`, lighting up each stage as it goes. Click a stage to see
+what it does. The command line works without this app; the app just calls the same code.
 """
 from __future__ import annotations
 
@@ -267,8 +266,8 @@ class App(ctk.CTk):
         self.log_text.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
     def _wire_actions(self) -> None:
-        """Keyboard shortcuts, plus a click fallback on mouse-up. Tk 8.6.12 on recent macOS can drop trackpad
-        taps; the busy flag stops an action starting twice if both press and release get through."""
+        """Keyboard shortcuts, and fire on mouse-up too in case a click's press gets lost.
+        The busy flag makes sure an action can't start twice."""
         mod = "Command" if sys.platform == "darwin" else "Control"
         self.bind_all(f"<{mod}-r>", lambda _e: self._on_refresh())
         self.bind_all(f"<{mod}-Shift-F>", lambda _e: self._on_fresh())
@@ -439,7 +438,7 @@ class App(ctk.CTk):
         try:
             msg = task()
             self.events.put(("done", True, msg or ""))
-        except Exception as exc:  # shown in the window; the log has the detail
+        except Exception as exc:  # show it in the app; the log has the full detail
             logging.getLogger("app").exception("Run failed")
             self.events.put(("done", False, f"{type(exc).__name__}: {exc}"))
 
@@ -450,7 +449,7 @@ class App(ctk.CTk):
         self._notify(msg if ok else f"Stopped: {msg}", error=not ok)
 
     def _notify(self, text_: str, error: bool = False) -> None:
-        """Messages go in the header, not pop-ups: Tk's native dialogs don't reliably appear on recent macOS."""
+        """Show messages in the header instead of pop-up dialogs, which don't always appear on a Mac."""
         self.status_label.configure(text=text_[:140], text_color="#FDA29B" if error else "white")
 
     def _on_fresh(self) -> None:
@@ -481,8 +480,8 @@ class App(ctk.CTk):
             self._notify("No KPI pack yet: run the pipeline first")
 
     def _open_powerbi(self) -> None:
-        """POWERBI_URL (optional, in .env) wins, e.g. the semantic model page with Refresh now. Otherwise the
-        repo's .pbix in Power BI Desktop on Windows, otherwise Power BI in the browser."""
+        """Open whatever makes sense: POWERBI_URL from .env if it's set, else the repo's .pbix on Windows,
+        else Power BI in the browser."""
         url = os.getenv("POWERBI_URL", "").strip()
         reports = sorted((PROJECT_ROOT / "powerbi").glob("*.pbix"))
         if url:
@@ -516,7 +515,7 @@ class App(ctk.CTk):
     def _task_readiness(self) -> str:
         self._ensure_database(start_if_needed=True)
         engine = get_engine()
-        load.init_schema(engine)  # idempotent: a fresh clone (or a reset database) has no tables yet
+        load.init_schema(engine)  # safe every time: a fresh clone or a reset database has no tables yet
         self.events.put(("loaded", load.loaded_months(engine)))
         self._push_kpis()
         return "Ready"

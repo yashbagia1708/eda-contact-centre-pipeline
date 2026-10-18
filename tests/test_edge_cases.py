@@ -1,5 +1,5 @@
-"""Edge cases from a peer review: unknown CRM agents, forecast rows with no queue, and which months count as loaded.
-No MySQL needed: the cleaning tests use the September sample files, the run-log test uses in-memory SQLite."""
+"""Edge cases: CRM agents not on the roster, forecast rows with no queue, and which months count as loaded.
+No MySQL needed: the cleaning tests use the September sample, the run-log test uses an in-memory SQLite table."""
 from pathlib import Path
 
 import pandas as pd

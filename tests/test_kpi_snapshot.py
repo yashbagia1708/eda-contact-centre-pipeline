@@ -1,9 +1,8 @@
 """
-Regression snapshot: after loading September and October, the headline numbers must match exactly.
+Snapshot of the headline numbers after loading September and October: they must match exactly.
 
-The 12 reconciliation checks prove the data hangs together, but a wrong formula in a view can still produce a
-plausible percentage. Pinning the known results catches that. Needs a loaded database, so it skips locally when
-there isn't one; CI sets REQUIRE_DB=1 and runs it after the loads, where skipping would hide a failure.
+The reconciliation checks prove the data adds up, but a wrong formula can still give a believable percentage,
+so pin the known results. Skips when no database is loaded; CI sets REQUIRE_DB=1 so it can't skip there.
 """
 import os
 

@@ -59,8 +59,9 @@ def finish_run(engine: Engine, run_id: int, status: str, loaded: int | None = No
 
 
 def loaded_months(engine: Engine) -> set[str]:
-    """Months whose latest run succeeded. A later failure (say the Power BI export) un-marks the month, so the
-    next auto run loads it again instead of treating an earlier success as good enough."""
+    """Months whose most recent run succeeded.
+
+    If a later run fails (say the export breaks), the month drops off this list, so the next run loads it again."""
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT reporting_month FROM (

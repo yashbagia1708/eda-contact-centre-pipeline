@@ -265,7 +265,7 @@ DEFINE
         )
 
     MEASURE Calls[Report Title] =
-        // Australian month format: 10-2026
+        // month shown as 10-2026
         VAR MonthStart = SELECTEDVALUE ( 'Date'[Month Start] )
         RETURN
             "Contact Centre Performance | "

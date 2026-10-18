@@ -270,8 +270,8 @@ def clean_crm(raw: pd.DataFrame, month: str, calls: pd.DataFrame, roster: pd.Dat
     no_outcome = df["outcome"].isna()
     dq.record(src, "missing outcome (set to 'Not recorded')", "warning", no_outcome.sum())
 
-    # Same rule as telephony: an agent not on this month's roster becomes UNKNOWN (reported), so the case still
-    # counts and still joins to the agent dimension. A missing ID is treated the same way.
+    # Agent not on this month's roster, or missing? Use UNKNOWN and report it, like telephony does,
+    # so the case still counts and still joins to the agent table.
     emp = df["agent.employee_id"].astype("string").str.strip().str.upper()
     unknown = emp.isna() | (emp == "") | ~emp.isin(roster["employee_id"])
     dq.record(src, "agent not on roster (mapped to UNKNOWN)", "warning", unknown.sum(),

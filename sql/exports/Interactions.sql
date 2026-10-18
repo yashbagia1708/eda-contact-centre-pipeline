@@ -1,6 +1,6 @@
 -- CRM cases with the behavioural FCR flags computed in vw_interaction_fcr
--- Queue comes from the linked call. Cases with no call in telephony fall back to their brand's
--- 'Not linked to a call' queue, so every case still counts towards its brand (no blank queue in Power BI).
+-- Queue comes from the linked call. No call in telephony? Use the brand's 'Not linked to a call' queue,
+-- so the case still counts towards its brand.
 SELECT
     i.case_id, i.interaction_id, CAST(DATE_FORMAT(i.call_date, '%Y%m%d') AS UNSIGNED) AS date_key, i.call_date,
     COALESCE(c.queue_id, uq.queue_id) AS queue_id, COALESCE(i.employee_id, 'UNKNOWN') AS employee_id, i.brand, i.policy_number, i.contact_reason,
