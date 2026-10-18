@@ -1,6 +1,6 @@
 // GitHub Codespaces: the whole project in the browser, including the Refresh Console.
 // Code → Codespaces → Create codespace. When it's ready, open the "Desktop (Refresh Console)" port (6080) in the
-// Ports tab, then run `python app.py` in the terminal: the window appears on that browser desktop.
+// Ports tab, then run `python app.py` in the terminal: the app opens on that browser desktop.
 {
   "name": "EDA contact centre pipeline",
   "image": "mcr.microsoft.com/devcontainers/python:3.12",

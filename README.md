@@ -74,7 +74,7 @@ No Docker or Python on this machine? Use [Codespaces](#no-docker-run-it-in-your-
 
 ### Refresh Console
 
-The monthly refresh in one window. It checks Docker and MySQL (and starts the database if needed), watches the
+The monthly refresh in one app. It checks Docker and MySQL (and starts the database if needed), watches the
 source folder so a new month lights up the moment its files land, and runs the pipeline with every stage lit up as it
 goes: row counts, data-quality findings, 12 reconciliation checks, then the hand-off to Power BI. Click any stage to
 see what it does and why.
@@ -147,7 +147,7 @@ The same Refresh Console, on a cloud machine GitHub sets up for you. Nothing to 
 
 ### Or just watch the pipeline run on GitHub Actions
 
-One click, nothing to install, no window: the same pipeline on GitHub's servers, with the outputs to download.
+One click, nothing to install, no app: the same pipeline on GitHub's servers, with the outputs to download.
 
 1. Open **[Actions → pipeline](https://github.com/yashbagia1708/eda-contact-centre-pipeline/actions/workflows/pipeline.yml)** and click **Run workflow → Run workflow**.
 2. In about 3 minutes a fresh machine starts an empty MySQL 8, runs the unit tests, loads September, finds and
@@ -156,14 +156,14 @@ One click, nothing to install, no window: the same pipeline on GitHub's servers,
 3. Under **Artifacts** at the bottom of the run, download **outputs**: the Power BI model workbook, both monthly
    KPI packs (Excel), the run logs and the quarantined rows.
 
-The Refresh Console is a desktop window, so it doesn't run in Actions: GitHub's runners have no screen to show it
-on. This run is the same pipeline without the window: the same stages, logs, checks and outputs. To use the Refresh
+The Refresh Console is a desktop app, so it doesn't run in Actions: GitHub's runners have no screen to show it
+on. This run is the same pipeline without the app: the same stages, logs, checks and outputs. To use the Refresh
 Console without installing anything, [use Codespaces](#no-docker-run-it-in-your-browser-with-github-codespaces).
 
 Every push runs the same job, so the [latest runs](https://github.com/yashbagia1708/eda-contact-centre-pipeline/actions) are already there to look at.
 
 <details>
-<summary><b>Prefer the command line?</b> The same pipeline without the window, plus outputs and extra commands</summary>
+<summary><b>Prefer the command line?</b> The same pipeline without the app, plus outputs and extra commands</summary>
 
 **Mac / Linux**
 
@@ -311,7 +311,7 @@ so nobody has to click Refresh.
 ```
 config/queue_mapping.csv     business-owned mapping of raw queue names → queue, brand, SL target
 data/raw/YYYY-MM/            monthly source drops (mock)
-app.py                       Refresh Console: the monthly refresh in one window (CustomTkinter)
+app.py                       Refresh Console: the monthly refresh in one app (CustomTkinter)
 pipeline/                    extract → transform → quality → load → export, orchestrated by run.py;
                              checks.py holds the post-load reconciliation checks
 sql/                         schema, merges, views, exports, report queries
