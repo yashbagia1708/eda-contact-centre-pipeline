@@ -147,6 +147,8 @@ def clean_forecast(raw: pd.DataFrame, month: str, queues: pd.DataFrame, dq: DQLo
     df = dq.reject(src, df, df["forecast_date"].isna(), "unparseable date")
     df = dq.reject(src, df, df["brand"].isna() | df["queue_function"].isna(), "unmapped brand or queue group")
     df = df.merge(queues[["queue_id", "brand", "queue_function"]], on=["brand", "queue_function"], how="left")
+    df = dq.reject(src, df, df["queue_id"].isna(), "no queue for brand and queue group",
+                   "add the pairing to config/queue_mapping.csv")
     out = pd.DataFrame({
         "forecast_date": df["forecast_date"].dt.date,
         "queue_id": df["queue_id"],
@@ -243,7 +245,7 @@ def clean_calls(raw: pd.DataFrame, month: str, mapping: pd.DataFrame, roster: pd
 
 
 # ------------------------------------------------------------------ CRM
-def clean_crm(raw: pd.DataFrame, month: str, calls: pd.DataFrame, dq: DQLog) -> pd.DataFrame:
+def clean_crm(raw: pd.DataFrame, month: str, calls: pd.DataFrame, roster: pd.DataFrame, dq: DQLog) -> pd.DataFrame:
     src = "crm"
     _require(raw, ["case_id", "interaction_ref", "created", "agent.employee_id", "customer.brand",
                    "contact_reason", "outcome"], src)
@@ -268,6 +270,14 @@ def clean_crm(raw: pd.DataFrame, month: str, calls: pd.DataFrame, dq: DQLog) -> 
     no_outcome = df["outcome"].isna()
     dq.record(src, "missing outcome (set to 'Not recorded')", "warning", no_outcome.sum())
 
+    # Same rule as telephony: an agent not on this month's roster becomes UNKNOWN (reported), so the case still
+    # counts and still joins to the agent dimension. A missing ID is treated the same way.
+    emp = df["agent.employee_id"].astype("string").str.strip().str.upper()
+    unknown = emp.isna() | (emp == "") | ~emp.isin(roster["employee_id"])
+    dq.record(src, "agent not on roster (mapped to UNKNOWN)", "warning", unknown.sum(),
+              str(sorted(emp[unknown].fillna("(missing)").unique().tolist())[:5]) if unknown.any() else "")
+    df["employee_id_clean"] = emp.where(~unknown, "UNKNOWN")
+
     orphans = ~df["interaction_id"].isin(calls["interaction_id"])
     dq.record(src, "case not linked to a call in this month's telephony", "warning", orphans.sum(),
               "kept; usually calls answered just before month end")
@@ -277,7 +287,7 @@ def clean_crm(raw: pd.DataFrame, month: str, calls: pd.DataFrame, dq: DQLog) -> 
         "interaction_id": df["interaction_id"],
         "reporting_month": month,
         "created_ts_local": df["created_ts_local"],
-        "employee_id": df["agent.employee_id"].astype(str).str.strip().str.upper(),
+        "employee_id": df["employee_id_clean"].astype(object),
         "brand": df["brand_clean"],
         "policy_number": df["customer.policy_number"].where(df["customer.policy_number"].notna(), None),
         "contact_reason": df["contact_reason"].astype(str).str.strip(),

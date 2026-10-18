@@ -79,7 +79,7 @@ def run_month(engine, month: str, skip_export: bool = False, progress: Progress 
         roster = transform.clean_roster(roster_raw, dq)
         forecast = transform.clean_forecast(forecast_raw, month, queues, dq)
         calls = transform.clean_calls(telephony_raw, month, mapping, roster, dq)
-        crm = transform.clean_crm(crm_raw, month, calls, dq)
+        crm = transform.clean_crm(crm_raw, month, calls, roster, dq)
         survey = transform.clean_survey(survey_raw, month, dq)
         findings = [r for r in dq.results if r.rows and r.severity != "info"]
         drift = any("schema drift" in r.check for r in dq.results if r.rows)

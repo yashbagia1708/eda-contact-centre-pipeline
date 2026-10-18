@@ -229,7 +229,7 @@ flowchart LR
     V --> DQ
 ```
 
-`python -m pipeline.run` with no arguments finds the earliest month folder that hasn't loaded successfully
+`python -m pipeline.run` with no arguments finds the earliest month folder whose latest run didn't succeed
 (tracked in `etl_run_log`) and runs:
 
 1. **Extract**: one reader per system, each knowing only its own format (CSV, nested JSON, Excel with a title
@@ -248,7 +248,7 @@ flowchart LR
 ### The mess it handles
 
 <details>
-<summary>Data problems planted in the mock sources, and how each is handled (12 rows)</summary>
+<summary>Data problems planted in the mock sources, and how each is handled</summary>
 
 | Source | Problem | Handling |
 |---|---|---|
@@ -260,9 +260,11 @@ flowchart LR
 | Telephony | Outbound callbacks mixed into the inbound log | Excluded from inbound KPIs |
 | CRM | Call IDs uppercase, some wrapped in `{}`. Survey IDs have no hyphens | All three formats normalise to one key |
 | CRM | Brand as `Club 4x4` / `CLUB 4X4` / `Club4x4` / `KT Ins` | Alias map |
+| CRM | Case assigned to an agent ID that isn't on the roster, or no agent at all | Mapped to the `UNKNOWN` agent and reported, the same rule as telephony, so the case still counts |
 | CRM | About 9 cases a month have no matching call in telephony (often answered just before month end) | Kept, and grouped under their brand's *Not linked to a call* queue so brand totals reconcile in Power BI |
 | Survey | Date format switched from `dd/mm/yyyy` to ISO mid-October | Explicit formats only, never month-first guessing |
-| Survey | CSAT `N/A`, NPS of 11, customers submitting twice | N/A → null. Out of range → quarantined. Duplicates resolved in SQL with `ROW_NUMBER()` |
+| Survey | CSAT `N/A`, NPS of 11, customers submitting twice (even in different months' files) | N/A → null. Out of range → quarantined. Latest response wins via `ROW_NUMBER()`, across months too, so the result doesn't depend on load order |
+| WFM | Forecast row for a brand + queue group with no queue in the mapping | Quarantined with the reason, instead of failing the load with a database error |
 | WFM | Title rows above the header. FTE as `0.8` or `80%`. Login case and spacing | Header row detected. FTE parsed. Logins normalised to match telephony |
 
 </details>
